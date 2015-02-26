@@ -30,7 +30,9 @@
             RC.apply(config, {
                 fixedPadding: 10,
                 tagSpacing: 5,
-                tags: new RC.MixedCollection()
+                tags: new RC.MixedCollection(),
+                minHeight: 100,
+                maxHeight: 400
             });
 
             RC.form.TagArea.superclass.constructor.apply(this, [config]);
@@ -42,13 +44,17 @@
 
             view = new Element('div');
             view.setStyles({
-                position: 'relative'
+                position: 'relative',
+                height: pixels(self.minHeight)
             });
 
             textarea = new Element('textarea');
             textarea.setStyles({
                 resize: 'none',
-                padding: pixels(self.fixedPadding)
+                padding: pixels(self.fixedPadding),
+                boxSizing: 'border-box',
+                width: '100%',
+                height: '100%'
             });
             textarea.inject(view);
             textarea.addEvent('newTagIsGoingToBeCreated', function(event) {
