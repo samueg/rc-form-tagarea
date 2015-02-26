@@ -56,12 +56,16 @@
                 
                 var text = textarea.getProperty('value'),
                     tag = new Tag(text, null),
-                    tagLocation;
+                    tagLocation,
+                    cursorLocation;
 
                 tag.compile(view);
                 tagLocation = self._calculateNewTagLocation();
                 tag.setLocation(tagLocation);
+
                 textarea.setProperty('value', '');
+                cursorLocation = tag.getTailLocation().offset(self.tagSpacing);
+                self._updateCursorLocation(cursorLocation);
 
                 self.tags.add(tag);
             });
@@ -75,21 +79,21 @@
             var self = this,
                 view = self.getRenderedCanvas()
                 ;
-            if (view) {
-                return view.getElement();
-            }
+
+            return view ? view.getElement('textarea') : null;
         },
         _getContentDimension: function() {
             var self = this,
                 result,
-                view = self.getRenderedCanvas(),
+                textarea,
                 size,
                 width,
                 height
                 ;
 
-            if (view) {
-                size = view.getElement('textarea').getSize();
+            textarea = self._getTextArea();
+            if (textarea) {
+                size = textarea.getSize();
                 width = size.x - (self.fixedPadding * 2);
                 height = size.y - (self.fixedPadding * 2);
                 result = new Dimension(width, height);
@@ -103,8 +107,7 @@
         _calculateNewTagLocation: function() {
             var self = this,
                 lastTag,
-                location,
-                dimension,
+                lastTagTailLocation,
                 result = new Location();
                 ;
 
@@ -112,12 +115,24 @@
                 result = result.offset(self.fixedPadding, self.fixedPadding);
             } else {
                 lastTag = self.tags.last();
-                location = lastTag.getLocation();
-                dimension = lastTag.getDimension();
-                result = result.offset(location).offset(dimension.getWidth()).offset(self.tagSpacing);
+                lastTagTailLocation = lastTag.getTailLocation();
+                result = lastTagTailLocation.offset(self.tagSpacing);
             }
 
             return result;
+        },
+        _updateCursorLocation: function(cursorLocation) {
+            var self = this,
+                textarea
+                ;
+
+            textarea = self._getTextArea();
+            if (textarea) {
+                textarea.setStyles({
+                    paddingLeft: pixels(cursorLocation.getX()),
+                    paddingTop: pixels(cursorLocation.getY())
+                });
+            }
         }        
     });
 
@@ -160,7 +175,7 @@
         },
         getLocation: function() {
             var self = this,
-                result,
+                result = new Location(),
                 view = self.getRenderedCanvas(),
                 offsetParent,
                 position
@@ -182,9 +197,12 @@
                 top: location.getY()
             });
         },
+        getTailLocation: function() {
+            return this.getLocation().offset(this.getDimension().getWidth());
+        },
         getDimension: function() {
             var self = this,
-                result,
+                result = new Dimension(),
                 view = self.getRenderedCanvas(),
                 size
                 ;
