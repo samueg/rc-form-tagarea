@@ -75,6 +75,26 @@
 
                 self.tags.add(tag);
             });
+            textarea.addEvent('keyup', function(event) {
+                var value,
+                    availableWidth,
+                    maxAvailableWidth,
+                    valueWidth,
+                    referredTag,
+                    cursorLocation
+                    ;
+
+                value = textarea.getProperty('value');
+                availableWidth = self._getAvailableWidth();
+                maxAvailableWidth = self._getMaxAvailableWidth();
+                valueWidth = self._calculateWidthOfAString(value);
+                if (self.tags.length > 0 && availableWidth != maxAvailableWidth && availableWidth < valueWidth) {
+                    referredTag = self.tags.last();
+                    cursorLocation = referredTag.getLocation().offset(0, referredTag.getDimension().getHeight())
+                        .offset(0, self.tagSpacing).setX(self.fixedPadding);
+                    self._updateCursorLocation(cursorLocation);
+                }
+            });
 
             return view;
         },
@@ -88,26 +108,54 @@
 
             return view ? view.getElement('textarea') : null;
         },
-        _getContentDimension: function() {
+        _getAvailableWidth: function() {
             var self = this,
-                result,
-                textarea,
-                size,
-                width,
-                height
+                textarea = self._getTextArea()
                 ;
 
-            textarea = self._getTextArea();
-            if (textarea) {
-                size = textarea.getSize();
-                width = size.x - (self.fixedPadding * 2);
-                height = size.y - (self.fixedPadding * 2);
-                result = new Dimension(width, height);
+            return textarea ? getContentDimension(textarea).getWidth() : 0;
+        },
+        _getMaxAvailableWidth: function() {
+            var self = this,
+                textarea = self._getTextArea(),
+                paddings = {
+                    top: self.fixedPadding,
+                    right: self.fixedPadding,
+                    bottom: self.fixedPadding,
+                    left: self.fixedPadding
+                }
+                ;
+
+            return textarea ? getContentDimension(textarea, paddings).getWidth() : 0;            
+        },
+        _calculateWidthOfAString: function(aString) {
+            var self = this,
+                result = 0,
+                view = self.getRenderedCanvas(),
+                ruler
+                ;
+
+            if (view) {
+                ruler = new Element('span', {
+                    id: getRulerId(),
+                    html: aString,
+                });
+                ruler.setStyles({
+                    visibility: 'hidden',
+                    position: 'absolute',
+                    whiteSpace: 'nowrap'
+                });
+                ruler.inject(view);
+                result = ruler.getSize().x;
+                ruler.dispose();
+
             }
 
             return result;
-        },
-        _calculateAvailableWidth: function() {
+
+            function getRulerId() {
+                return self.getId() + '-ruler';
+            }
 
         },
         _calculateNewTagLocation: function() {
@@ -276,6 +324,38 @@
         return new Dimension();
     }
 
+    function getContentDimension(element, paddings, borderWidths) {
+        var size,
+            leftBorderWidth,
+            leftPadding,
+            rightBorderWidth,
+            rightPadding,
+            topBorderWidth,
+            topPadding,
+            bottomBorderWidth,
+            bottomPadding,
+            width,
+            height
+            ;
+
+        paddings = paddings || {};
+        borderWidths = borderWidths || {};
+
+        size = element.getSize();
+        leftBorderWidth = borderWidths.left || parseFloat(element.getStyle('border-left-width'));
+        leftPadding = paddings.left || parseFloat(element.getStyle('padding-left'));
+        rightBorderWidth = borderWidths.right || parseFloat(element.getStyle('border-right-width'));
+        rightPadding = paddings.right || parseFloat(element.getStyle('padding-right'));
+        topBorderWidth = borderWidths.top || parseFloat(element.getStyle('border-top-width'));
+        topPadding = paddings.top || parseFloat(element.getStyle('padding-top'));
+        bottomBorderWidth = borderWidths.bottom || parseFloat(element.getStyle('border-bottom-width'));
+        bottomPadding = paddings.bottom || parseFloat(element.getStyle('padding-bottom'));
+                
+                
+        width = size.x - leftBorderWidth - leftPadding - rightBorderWidth - rightPadding;
+        height = size.y - topBorderWidth - topPadding - bottomBorderWidth - bottomPadding;
+        return new Dimension(width, height);
+    }
 })();
 
 RC.reg('x-form-tagarea', RC.form.TagArea);
