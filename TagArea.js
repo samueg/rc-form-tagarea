@@ -160,19 +160,15 @@
         },
         _calculateNewTagLocation: function() {
             var self = this,
-                lastTag,
-                lastTagTailLocation,
-                result = new Location();
+                result,
+                textarea
                 ;
 
-            if (self.tags.length == 0) {
-                result = result.offset(self.fixedPadding, self.fixedPadding);
-            } else {
-                lastTag = self.tags.last();
-                lastTagTailLocation = lastTag.getTailLocation();
-                result = lastTagTailLocation.offset(self.tagSpacing);
+            result = new Location();
+            textarea = self._getTextArea();
+            if (textarea) {
+                result = result.offset(getContentLocation(textarea));
             }
-
             return result;
         },
         _updateCursorLocation: function(cursorLocation) {
@@ -322,6 +318,22 @@
 
     function calculateTagDimension(tagArea, tag) {
         return new Dimension();
+    }
+
+    function getContentLocation(element, paddings, borderWidths) {
+        var x,
+            y
+            ;
+
+        paddings = paddings || {};
+        borderWidths = borderWidths || {};
+
+        x = (borderWidths.left || parseFloat(element.getStyle('border-left-width'))) 
+                + (paddings.left || parseFloat(element.getStyle('padding-left')));
+        y = (borderWidths.top || parseFloat(element.getStyle('border-top-width')))
+                + (paddings.top || parseFloat(element.getStyle('padding-top')));
+
+        return new Location(x, y);
     }
 
     function getContentDimension(element, paddings, borderWidths) {
