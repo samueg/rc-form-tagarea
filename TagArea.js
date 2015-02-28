@@ -6,6 +6,34 @@
         }
     };
 
+    Element.Events.pendingContentOverflow = {
+        base: 'keypress',
+        condition: function(event) {
+            var result = ('enter' != event.key),
+                tagArea = event.target.tagArea,
+                pendingContent,
+                availableWidth,
+                maxAvailableWidth,
+                pendingContentWidth
+                ;
+
+            if (tagArea) {
+                pendingContent = tagArea.getPendingContent();
+                availableWidth = tagArea._getAvailableWidth();
+                maxAvailableWidth = tagArea._getMaxAvailableWidth();
+                pendingContentWidth = tagArea._calculateWidthOfAString(pendingContent);
+                event.availableSpaceShrinked = (availableWidth != maxAvailableWidth);
+                result = result && (availableWidth < pendingContentWidth);
+            }
+
+            return result;
+        }
+    };
+
+    Element.Events.tagOverflow = {
+
+    };
+
     Class.Mutators.GetterSetter = function(properties) { 
         var klass = this; 
         Array.from(properties).each(function(property) {
@@ -49,6 +77,7 @@
             });
 
             textarea = new Element('textarea');
+            textarea.tagArea = self;
             textarea.setStyles({
                 resize: 'none',
                 padding: pixels(self.fixedPadding),
@@ -69,30 +98,25 @@
                 tagLocation = self._calculateNewTagLocation();
                 tag.setLocation(tagLocation);
 
+                console.log(tagLocation.getX() + ', ' + tagLocation.getY());
+
                 textarea.setProperty('value', '');
                 cursorLocation = tag.getTailLocation().offset(self.tagSpacing);
                 self._updateCursorLocation(cursorLocation);
 
                 self.tags.add(tag);
             });
-            textarea.addEvent('keyup', function(event) {
-                var value,
-                    availableWidth,
-                    maxAvailableWidth,
-                    valueWidth,
-                    referredTag,
+
+            textarea.addEvent('pendingContentOverflow', function(event) {
+                var referredTag,
                     cursorLocation
                     ;
 
-                value = textarea.getProperty('value');
-                availableWidth = self._getAvailableWidth();
-                maxAvailableWidth = self._getMaxAvailableWidth();
-                valueWidth = self._calculateWidthOfAString(value);
-                if (self.tags.length > 0 && availableWidth != maxAvailableWidth && availableWidth < valueWidth) {
+                if (event.availableSpaceShrinked) {
                     referredTag = self.tags.last();
                     cursorLocation = referredTag.getLocation().offset(0, referredTag.getDimension().getHeight())
                         .offset(0, self.tagSpacing).setX(self.fixedPadding);
-                    self._updateCursorLocation(cursorLocation);
+                    self._updateCursorLocation(cursorLocation);                    
                 }
             });
 
@@ -100,6 +124,13 @@
         },
         getId: function() {
             return this.id;
+        },
+        getPendingContent: function() {
+            var self = this,
+                textarea = self._getTextArea()
+                ;
+
+            return textarea ? textarea.getProperty('value') : '';
         },
         _getTextArea: function() {
             var self = this,
