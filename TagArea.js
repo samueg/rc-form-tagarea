@@ -18,11 +18,11 @@
                 ;
 
             if (tagArea) {
-                pendingContent = tagArea.getPendingContent();
                 availableWidth = tagArea._getAvailableWidth();
                 maxAvailableWidth = tagArea._getMaxAvailableWidth();
-                pendingContentWidth = tagArea._calculateWidthOfAString(pendingContent);
                 event.availableSpaceShrinked = (availableWidth != maxAvailableWidth);
+                pendingContent = tagArea.getPendingContent();
+                pendingContentWidth = tagArea._calculateWidthOfAString(pendingContent);
                 console.log(availableWidth + ', ' + pendingContentWidth);
                 result = result && (availableWidth <= pendingContentWidth);
             }
@@ -30,6 +30,31 @@
             return result;
         }
     };
+
+    Element.Events.pendingContentFitAgain = {
+        base: 'keyup',
+        condition: function(event) {
+            var result = false,
+                tagArea = event.target.tagArea,
+                pendingContent,
+                availableWidth,
+                availaleWidthAfterLastTag,
+                maxAvailableWidth,
+                pendingContentWidth
+                ;
+
+            if (tagArea) {
+                availableWidth = tagArea._getAvailableWidth();
+                availaleWidthAfterLastTag = tagArea._getAvailaleWidthAfterLastTag();
+                console.log('fitAgain: ' + availableWidth + ', ' + availaleWidthAfterLastTag);
+                pendingContent = tagArea.getPendingContent();
+                pendingContentWidth = tagArea._calculateWidthOfAString(pendingContent);
+                result = (availableWidth != availaleWidthAfterLastTag) && (availaleWidthAfterLastTag > pendingContentWidth);
+            }
+
+            return result;
+        }
+    };    
 
     Element.Events.tagOverflow = {
 
@@ -122,8 +147,18 @@
                     referredTag = self.tags.last();
                     cursorLocation = referredTag.getLocation().offset(0, referredTag.getDimension().getHeight())
                         .offset(0, self.tagSpacing).setX(self.fixedPadding);
-                    self._updateCursorLocation(cursorLocation);                    
+                    self._updateCursorLocation(cursorLocation);
                 }
+            });
+
+            textarea.addEvent('pendingContentFitAgain', function(event) {
+                var referredTag,
+                    cursorLocation
+                    ;
+
+                referredTag = self.tags.last();
+                cursorLocation = referredTag.getTailLocation().offset(self.tagSpacing);
+                self._updateCursorLocation(cursorLocation);                
             });
 
             return view;
@@ -169,6 +204,30 @@
                 ;
 
             return textarea ? getContentDimension(textarea).getWidth() : 0;
+        },
+        _getAvailaleWidthAfterLastTag: function() {
+            var self = this,
+                result = 0,
+                lastTag,
+                location,
+                baseLocation,
+                difference,
+                usedWidth,
+                maxAvailableWidth = self._getMaxAvailableWidth()
+                ;
+
+            if (self.tags.length == 0) {
+                result = maxAvailableWidth;
+            } else {
+                lastTag = self.tags.last();
+                location = lastTag.getTailLocation().offset(self.tagSpacing);
+                baseLocation = self._getBaseLocation();
+                difference = location.getDifference(baseLocation);
+                usedWidth = difference.getWidth() - self.fixedPadding;
+                result = maxAvailableWidth - usedWidth;
+            }
+
+            return result;
         },
         _getMaxAvailableWidth: function() {
             var self = this,
