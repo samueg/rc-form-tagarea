@@ -7,7 +7,7 @@
     };
 
     Element.Events.pendingContentOverflow = {
-        base: 'keypress',
+        base: 'keyup',
         condition: function(event) {
             var result = ('enter' != event.key),
                 tagArea = event.target.tagArea,
@@ -23,7 +23,8 @@
                 maxAvailableWidth = tagArea._getMaxAvailableWidth();
                 pendingContentWidth = tagArea._calculateWidthOfAString(pendingContent);
                 event.availableSpaceShrinked = (availableWidth != maxAvailableWidth);
-                result = result && (availableWidth < pendingContentWidth);
+                console.log(availableWidth + ', ' + pendingContentWidth);
+                result = result && (availableWidth <= pendingContentWidth);
             }
 
             return result;
@@ -54,6 +55,9 @@
 
     RC.form.TagArea = RC.extend(RC.form.Field, {
         constructor: function(config) {
+            var self = this
+                ;
+
             config = config || {};
             RC.apply(config, {
                 fixedPadding: 10,
@@ -70,7 +74,9 @@
                 view,
                 textarea;
 
-            view = new Element('div');
+            view = new Element('div', {
+                id: self.getId() + '-view'
+            });
             view.setStyles({
                 position: 'relative',
                 height: pixels(self.minHeight)
@@ -79,6 +85,8 @@
             textarea = new Element('textarea');
             textarea.tagArea = self;
             textarea.setStyles({
+                fontFamily: 'monospace',
+                fontSize: '14px',
                 resize: 'none',
                 padding: pixels(self.fixedPadding),
                 boxSizing: 'border-box',
@@ -97,8 +105,6 @@
                 tag.compile(view);
                 tagLocation = self._calculateNewTagLocation();
                 tag.setLocation(tagLocation);
-
-                console.log(tagLocation.getX() + ', ' + tagLocation.getY());
 
                 textarea.setProperty('value', '');
                 cursorLocation = tag.getTailLocation().offset(self.tagSpacing);
@@ -139,6 +145,24 @@
 
             return view ? view.getElement('textarea') : null;
         },
+        _getBaseLocation: function() {
+            var self = this,
+                result = new Location(),
+                view = self.getRenderedCanvas(),
+                textarea
+                ;
+
+            if (view) {
+                textarea = self._getTextArea();
+                x = parseFloat(view.getStyle('padding-left')) + parseFloat(textarea.getStyle('maring-left')) 
+                    + parseFloat(textarea.getStyle('border-left-width'));
+                y = parseFloat(view.getStyle('padding-top')) + parseFloat(textarea.getStyle('margin-top'))
+                    + parseFloat(textarea.getStyle('border-top-width'));
+                result = new Location(x, y);
+            }
+
+            return result;
+        },        
         _getAvailableWidth: function() {
             var self = this,
                 textarea = self._getTextArea()
@@ -169,9 +193,11 @@
             if (view) {
                 ruler = new Element('span', {
                     id: getRulerId(),
-                    html: aString,
+                    html: replaceSpaces(aString),
                 });
                 ruler.setStyles({
+                    fontFamily: 'monospace',
+                    fontSize: '14px',                    
                     visibility: 'hidden',
                     position: 'absolute',
                     whiteSpace: 'nowrap'
@@ -179,7 +205,6 @@
                 ruler.inject(view);
                 result = ruler.getSize().x;
                 ruler.dispose();
-
             }
 
             return result;
@@ -188,30 +213,59 @@
                 return self.getId() + '-ruler';
             }
 
+            function replaceSpaces(aString) {
+                var regExps = [/^\s+/, /\s+$/],
+                    matchResult,
+                    substitution
+                    ;
+
+                aString = aString || '';
+                regExps.each(function(regExp) {
+                    matchResult = aString.match(regExp);
+                    if (matchResult) {
+                        length = matchResult[0].length;
+                        substitution = '';
+                        while (length--) {
+                            substitution += '&nbsp;'
+                        }
+                        aString = aString.replace(regExp, substitution);
+                    }
+                });
+                
+                return aString;
+            }
         },
         _calculateNewTagLocation: function() {
             var self = this,
-                result,
-                textarea
+                result = self._getBaseLocation(),
+                textarea,
+                leftPadding,
+                topPadding
                 ;
 
-            result = new Location();
             textarea = self._getTextArea();
             if (textarea) {
-                result = result.offset(getContentLocation(textarea));
+                leftPadding = parseFloat(textarea.getStyle('padding-left'));
+                topPadding = parseFloat(textarea.getStyle('padding-top'));
+                result = result.offset(leftPadding, topPadding);
             }
+
             return result;
         },
         _updateCursorLocation: function(cursorLocation) {
             var self = this,
-                textarea
+                textarea,
+                baseLocation,
+                difference
                 ;
 
             textarea = self._getTextArea();
             if (textarea) {
+                baseLocation = self._getBaseLocation();
+                difference = cursorLocation.getDifference(baseLocation);
                 textarea.setStyles({
-                    paddingLeft: pixels(cursorLocation.getX()),
-                    paddingTop: pixels(cursorLocation.getY())
+                    paddingLeft: pixels(difference.getWidth()),
+                    paddingTop: pixels(difference.getHeight())
                 });
             }
         }        
@@ -322,6 +376,11 @@
             y = y || 0;
 
             return new Location(this.getX() + x, this.getY() + y);
+        },
+        getDifference: function(location) {
+            var self = this
+                ;
+            return new Dimension(self.getX() - location.getX(), self.getY() - location.getY());
         }
     });
 
