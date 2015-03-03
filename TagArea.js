@@ -459,9 +459,6 @@
                 top: location.getY()
             });
         },
-        getTailLocation: function() {
-            return this.getLocation().offset(this.getDimension().getWidth());
-        },
         getNextRowLeftAlignedSiblingLocation: function(spacing) {
             var self = this
                 ;
