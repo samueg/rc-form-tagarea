@@ -95,12 +95,16 @@
                 
                 var text = textarea.getProperty('value'),
                     tag = new Tag(text, null),
-                    tagLocation
+                    tagLocation,
+                    maxAvailableWidth = self._getMaxAvailableWidth()
                     ;
 
                 tag.compile(view);
                 tagLocation = self._calculateNewTagLocation(tag);
                 tag.setLocation(tagLocation);
+                if (tag.getDimension().getWidth() > maxAvailableWidth) {
+                    tag.setMaxWidth(maxAvailableWidth);
+                }
                 self.tags.add(tag);
 
                 textarea.setProperty('value', '');
@@ -222,7 +226,7 @@
                 // update the cursor location.
                 if (self.hasTags()) {
                     lastTag = self.tags.last();
-                    if (pendingContentOverflowed) {
+                    if (pendingContentOverflowed || (self._getOverflowThreshold() == 0)) {
                         cursorLocation = self._getBaseLocation().offset(self.fixedPadding, 0).setY(lastTag.getNextRowLeftAlignedSiblingLocation(self.tagSpacing).getY());
                     } else {                        
                         cursorLocation = lastTag.getNextColumnTopAlignedSiblingLocation(self.tagSpacing);
@@ -414,10 +418,13 @@
             view.setStyles({
                 backgroundColor: self.backgroundColor,
                 display: 'inline-block',
-                position: 'absolute'
+                position: 'absolute',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
             });
             
             textSpan = new Element('span', {
+                id: self.getId() + '-textSpan',
                 html: self.text
             });
             textSpan.setStyles({
@@ -488,8 +495,33 @@
             }
 
             return result;
-        }
+        },
+        setMaxWidth: function(maxWidth) {
+            var self = this,
+                view,
+                viewDimension,
+                viewContentDimension,
+                decorationWidth
+                ;
 
+            self._requireView();
+
+            view = self.getRenderedCanvas();
+            viewDimension = self.getDimension();
+            viewContentDimension = getContentDimension(view);
+            decorationWidth = viewDimension.getWidth() - viewContentDimension.getWidth();
+            view.setStyle('max-width', pixels(maxWidth - decorationWidth));
+        },
+        _requireView: function() {
+            var self = this,
+                view
+                ;
+
+            view = self.getRenderedCanvas();
+            if (!view) {
+                throw 'Tag is not rendered.'
+            }
+        }
     });
 
     var Location = new Class({
