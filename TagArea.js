@@ -24,32 +24,7 @@
 
             return  ('enter' != event.key) && tagArea && tagArea.isPendingContentOverflowed();
         }
-    };
-
-/*    Element.Events.pendingContentFitAgain = {
-        base: 'keyup',
-        condition: function(event) {
-            var result = false,
-                tagArea = event.target.tagArea,
-                pendingContent,
-                availableWidth,
-                availaleWidthAfterLastTag,
-                maxAvailableWidth,
-                pendingContentWidth
-                ;
-
-            if (tagArea) {
-                availableWidth = tagArea._getAvailableWidth();
-                availaleWidthAfterLastTag = tagArea._getAvailableWidthAfterLastTag();
-                console.log('fitAgain: ' + availableWidth + ', ' + availaleWidthAfterLastTag);
-                pendingContent = tagArea.getPendingContent();
-                pendingContentWidth = tagArea._calculateWidthOfAString(pendingContent);
-                result = (availableWidth != availaleWidthAfterLastTag) && (availaleWidthAfterLastTag > pendingContentWidth);
-            }
-
-            return result;
-        }
-    };*/    
+    };   
 
     Element.Events.tagOverflow = {
 
@@ -121,17 +96,25 @@
                 var text = textarea.getProperty('value'),
                     tag = new Tag(text, null),
                     tagLocation,
-                    cursorLocation;
+                    cursorLocation,
+                    overflowThreshold;
 
                 tag.compile(view);
-                tagLocation = self._calculateNewTagLocation();
+                tagLocation = self._calculateNewTagLocation(tag);
                 tag.setLocation(tagLocation);
+                self.tags.add(tag);
 
                 textarea.setProperty('value', '');
-                cursorLocation = tag.getTailLocation().offset(self.tagSpacing);
+
+                overflowThreshold = self._getOverflowThreshold();
+                if (overflowThreshold > 0) {
+                    cursorLocation = tag.getNextColumnTopAlignedSiblingLocation(self.tagSpacing);
+                } else {
+                    cursorLocation = self._getBaseLocation().setY(tag.getNextRowLeftAlignedSiblingLocation(self.tagSpacing));
+                }
                 self._updateCursorLocation(cursorLocation);
 
-                self.tags.add(tag);
+                self._updateViewHeight();
             });
 
             textarea.addEvent('pendingContentOverflow', function(event) {
@@ -140,7 +123,7 @@
                     viewHeight
                     ;
 
-                if (self._isAvailableSpaceShrinked()) {
+                if (self.hasTags() && self._isAvailableSpaceShrinked()) {
                     referredTag = self.tags.last();
                     cursorLocation = referredTag.getLocation().offset(0, referredTag.getDimension().getHeight())
                         .offset(0, self.tagSpacing).setX(self.fixedPadding);
@@ -155,7 +138,7 @@
                     cursorLocation
                     ;
 
-                if (!self._isAvailableSpaceShrinked()) {
+                if (self. hasTags() && !self._isAvailableSpaceShrinked()) {
                     referredTag = self.tags.last();
                     cursorLocation = referredTag.getTailLocation().offset(self.tagSpacing);
                     self._updateCursorLocation(cursorLocation);                     
@@ -170,6 +153,12 @@
         getId: function() {
             return this.id;
         },
+        hasTags: function() {
+            var self = this
+                ;
+
+            return self.tags.length > 0;
+        },
         getPendingContent: function() {
             var self = this,
                 textarea = self._getTextArea()
@@ -177,18 +166,42 @@
 
             return textarea ? textarea.getProperty('value') : '';
         },
+        _getOverflowThreshold: function() {
+            var self = this,
+                result = 0,
+                lastTag,
+                location,
+                baseLocation,
+                difference,
+                usedWidth,
+                maxAvailableWidth = self._getMaxAvailableWidth()
+                ;
+
+            if (self.tags.length == 0) {
+                result = maxAvailableWidth;
+            } else {
+                lastTag = self.tags.last();
+                location = lastTag.getNextColumnTopAlignedSiblingLocation(self.spacing);
+                baseLocation = self._getBaseLocation();
+                difference = location.getDifference(baseLocation);
+                usedWidth = difference.getWidth() - self.fixedPadding;
+                result = maxAvailableWidth - usedWidth;
+            }
+
+            return result;
+        },        
         isPendingContentOverflowed: function() {
             var self = this,
                 pendingContent,
                 pendingContentWidth,
-                availableWidth
+                overflowThreshold
                 ;
 
             pendingContent = self.getPendingContent();
             pendingContentWidth = self._calculateWidthOfAString(pendingContent);
-            availableWidth = self._getAvailableWidthAfterLastTag();
-            console.log(availableWidth + ', ' + pendingContentWidth);
-            return  availableWidth <= pendingContentWidth;
+            overflowThreshold = self._getOverflowThreshold();
+            console.log('pendingContentWidth/overflowThreshold: ' + pendingContentWidth + '/' + overflowThreshold);
+            return  pendingContentWidth >= overflowThreshold;
         },
         _isAvailableSpaceShrinked: function() {
             var self = this,
@@ -215,25 +228,29 @@
             maxAvailableWidth = self._getMaxAvailableWidth();
             rows = Math.ceil(pendingContentWidth / maxAvailableWidth);
 
-            console.log('rows: ' + rows);
-
-            return rows * 14 + (rows > 0 ? (rows - 1) * self.tagSpacing : 0);
+            return rows == 0 ? 14 : (rows * 14 + (rows - 1) * self.tagSpacing);
         },
         _updateViewHeight: function() {
             var self = this,
                 view = self.getRenderedCanvas(),
                 textareaContentHeight,
-                referredTag,
-                location
+                firstTag,
+                startLocation,
+                lastTag,
+                endLocation
                 ;
 
             if (view) {
-                if (self.tags.length == 0 || !self.isPendingContentOverflowed()) {
+                // update height
+                if (!self.hasTags()) {
                     textareaContentHeight = self._getPendingContentHeight();
                 } else {
-                    referredTag = self.tags.last();
-                    location = referredTag.getNextRowLeftAlignedSiblingLocation(self.tagSpacing);
-                    textareaContentHeight = location.getY() + self._getPendingContentHeight();
+                    firstTag = self.tags.first();
+                    startLocation = firstTag.getLocation();
+                    lastTag = self.tags.last();
+                    endLocation = lastTag.getNextRowLeftAlignedSiblingLocation(self.isPendingContentOverflowed() ? self.tagSpacing : 0);                    
+                    textareaContentHeight = endLocation.getDifference(startLocation).getHeight() 
+                        + (self.isPendingContentOverflowed() ? self._getPendingContentHeight() : 0);
                 }
                 view.setStyle('height', textareaContentHeight + 22);
             }
@@ -270,30 +287,6 @@
 
             return textarea ? getContentDimension(textarea).getWidth() : 0;
         },
-        _getAvailableWidthAfterLastTag: function() {
-            var self = this,
-                result = 0,
-                lastTag,
-                location,
-                baseLocation,
-                difference,
-                usedWidth,
-                maxAvailableWidth = self._getMaxAvailableWidth()
-                ;
-
-            if (self.tags.length == 0) {
-                result = maxAvailableWidth;
-            } else {
-                lastTag = self.tags.last();
-                location = lastTag.getTailLocation().offset(self.tagSpacing);
-                baseLocation = self._getBaseLocation();
-                difference = location.getDifference(baseLocation);
-                usedWidth = difference.getWidth() - self.fixedPadding;
-                result = maxAvailableWidth - usedWidth;
-            }
-
-            return result;
-        },
         _getMaxAvailableWidth: function() {
             var self = this,
                 textarea = self._getTextArea(),
@@ -327,7 +320,7 @@
                     whiteSpace: 'nowrap'
                 });
                 ruler.inject(view);
-                result = ruler.getSize().x;
+                result = Math.ceil(ruler.getSize().x);
                 ruler.dispose();
             }
 
@@ -359,20 +352,31 @@
                 return aString;
             }
         },
-        _calculateNewTagLocation: function() {
+        _calculateNewTagLocation: function(newTag) {
             var self = this,
                 result = self._getBaseLocation(),
                 textarea,
                 leftPadding,
-                topPadding
+                topPadding,
+                tagWidth,
+                overflowThreshold,
+                lastTag
                 ;
 
-            textarea = self._getTextArea();
-            if (textarea) {
-                leftPadding = parseFloat(textarea.getStyle('padding-left'));
-                topPadding = parseFloat(textarea.getStyle('padding-top'));
-                result = result.offset(leftPadding, topPadding);
-            }
+            overflowThreshold = self._getOverflowThreshold();
+            tagWidth = newTag.getDimension().getWidth();
+            console.log('overflowThreshold/New tag width: ' + overflowThreshold + '/' + tagWidth);
+            if (!self.hasTags() || tagWidth > overflowThreshold) {
+                textarea = self._getTextArea();
+                if (textarea) {
+                    leftPadding = parseFloat(textarea.getStyle('padding-left'));
+                    topPadding = parseFloat(textarea.getStyle('padding-top'));
+                    result = result.offset(leftPadding, topPadding);
+                }
+            } else {
+                lastTag = self.tags.last();
+                result = lastTag.getNextColumnTopAlignedSiblingLocation(self.tagSpacing);
+            } 
 
             return result;
         },
@@ -420,6 +424,9 @@
             textSpan = new Element('span', {
                 html: self.text
             });
+            textSpan.setStyles({
+                whiteSpace: 'nowrap'
+            });
             textSpan.inject(view);
 
             deleteIconSpan = new Element('span', {
@@ -463,8 +470,18 @@
             var self = this
                 ;
 
+            spacing = RC.isNumeric(spacing) ? spacing : 0;
+
             return self.getLocation().offset(0, self.getDimension().getHeight()).offset(0, spacing);
         },
+        getNextColumnTopAlignedSiblingLocation: function(spacing) {
+            var self = this
+                ;
+
+            spacing = RC.isNumeric(spacing) ? spacing : 0;
+
+            return self.getLocation().offset(self.getDimension().getWidth(), 0).offset(spacing, 0);
+        },        
         getDimension: function() {
             var self = this,
                 result = new Dimension(),
