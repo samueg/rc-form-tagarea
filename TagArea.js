@@ -12,7 +12,7 @@
             var tagArea = event.target.tagArea
                 ;
 
-            return  ('enter' != event.key) && tagArea && !tagArea.isPendingContentOverflowed();
+            return  ('enter' != event.key) && tagArea && !tagArea.hasOverflowedPendingContent();
         }
     };    
 
@@ -22,7 +22,7 @@
             var tagArea = event.target.tagArea
                 ;
 
-            return  ('enter' != event.key) && tagArea && tagArea.isPendingContentOverflowed();
+            return  ('enter' != event.key) && tagArea && tagArea.hasOverflowedPendingContent();
         }
     };   
 
@@ -110,7 +110,7 @@
                 if (overflowThreshold > 0) {
                     cursorLocation = tag.getNextColumnTopAlignedSiblingLocation(self.tagSpacing);
                 } else {
-                    cursorLocation = self._getBaseLocation().setY(tag.getNextRowLeftAlignedSiblingLocation(self.tagSpacing));
+                    cursorLocation = self._getBaseLocation().offset(self.fixedPadding, 0).setY(tag.getNextRowLeftAlignedSiblingLocation(self.tagSpacing).getY());
                 }
                 self._updateCursorLocation(cursorLocation);
 
@@ -125,8 +125,7 @@
 
                 if (self.hasTags() && self._isAvailableSpaceShrinked()) {
                     referredTag = self.tags.last();
-                    cursorLocation = referredTag.getLocation().offset(0, referredTag.getDimension().getHeight())
-                        .offset(0, self.tagSpacing).setX(self.fixedPadding);
+                    cursorLocation = self._getBaseLocation().offset(self.fixedPadding, 0).setY(referredTag.getNextRowLeftAlignedSiblingLocation(self.tagSpacing).getY());
                     self._updateCursorLocation(cursorLocation);
                 }
 
@@ -138,7 +137,7 @@
                     cursorLocation
                     ;
 
-                if (self. hasTags() && !self._isAvailableSpaceShrinked()) {
+                if (self.hasTags() && !self._isAvailableSpaceShrinked()) {
                     referredTag = self.tags.last();
                     cursorLocation = referredTag.getTailLocation().offset(self.tagSpacing);
                     self._updateCursorLocation(cursorLocation);                     
@@ -165,7 +164,7 @@
                 ;
 
             return textarea ? textarea.getProperty('value') : '';
-        },
+        },     
         _getOverflowThreshold: function() {
             var self = this,
                 result = 0,
@@ -177,31 +176,36 @@
                 maxAvailableWidth = self._getMaxAvailableWidth()
                 ;
 
-            if (self.tags.length == 0) {
+            if (!self.hasTags()) {
                 result = maxAvailableWidth;
             } else {
                 lastTag = self.tags.last();
-                location = lastTag.getNextColumnTopAlignedSiblingLocation(self.spacing);
+                location = lastTag.getNextColumnTopAlignedSiblingLocation(self.tagSpacing);
                 baseLocation = self._getBaseLocation();
                 difference = location.getDifference(baseLocation);
                 usedWidth = difference.getWidth() - self.fixedPadding;
                 result = maxAvailableWidth - usedWidth;
             }
 
-            return result;
+            return Math.max(result, 0);
         },        
-        isPendingContentOverflowed: function() {
+        hasOverflowedPendingContent: function() {
             var self = this,
+                result = false,
                 pendingContent,
                 pendingContentWidth,
                 overflowThreshold
                 ;
 
             pendingContent = self.getPendingContent();
-            pendingContentWidth = self._calculateWidthOfAString(pendingContent);
-            overflowThreshold = self._getOverflowThreshold();
-            console.log('pendingContentWidth/overflowThreshold: ' + pendingContentWidth + '/' + overflowThreshold);
-            return  pendingContentWidth >= overflowThreshold;
+            if (!RC.isEmpty(pendingContent)) {
+                pendingContentWidth = self._calculateWidthOfAString(pendingContent);
+                overflowThreshold = self._getOverflowThreshold();
+                console.log('pendingContentWidth/overflowThreshold: ' + pendingContentWidth + '/' + overflowThreshold);
+                result = pendingContentWidth > overflowThreshold;
+            }
+
+            return result;
         },
         _isAvailableSpaceShrinked: function() {
             var self = this,
@@ -215,21 +219,6 @@
 
             return availableWidth != maxAvailableWidth;
         },
-        _getPendingContentHeight: function() {
-            var self = this,
-                pendingContent,
-                pendingContentWidth,
-                maxAvailableWidth,
-                rows
-                ;
-
-            pendingContent = self.getPendingContent();
-            pendingContentWidth = self._calculateWidthOfAString(pendingContent);
-            maxAvailableWidth = self._getMaxAvailableWidth();
-            rows = Math.ceil(pendingContentWidth / maxAvailableWidth);
-
-            return rows == 0 ? 14 : (rows * 14 + (rows - 1) * self.tagSpacing);
-        },
         _updateViewHeight: function() {
             var self = this,
                 view = self.getRenderedCanvas(),
@@ -237,22 +226,48 @@
                 firstTag,
                 startLocation,
                 lastTag,
-                endLocation
+                endLocation,
+                pendingContent,
+                pendingContentHeight,
+                pendingContentOverflowed
                 ;
 
             if (view) {
                 // update height
+                pendingContent = self.getPendingContent();
+                pendingContentHeight = calculatePendingContentHeight(pendingContent);
+                pendingContentOverflowed = self.hasOverflowedPendingContent();
                 if (!self.hasTags()) {
-                    textareaContentHeight = self._getPendingContentHeight();
+                    textareaContentHeight = pendingContentHeight;
                 } else {
                     firstTag = self.tags.first();
                     startLocation = firstTag.getLocation();
                     lastTag = self.tags.last();
-                    endLocation = lastTag.getNextRowLeftAlignedSiblingLocation(self.isPendingContentOverflowed() ? self.tagSpacing : 0);                    
+                    endLocation = lastTag.getNextRowLeftAlignedSiblingLocation(pendingContentOverflowed ? self.tagSpacing : 0);                    
                     textareaContentHeight = endLocation.getDifference(startLocation).getHeight() 
-                        + (self.isPendingContentOverflowed() ? self._getPendingContentHeight() : 0);
+                        + (pendingContentOverflowed ? pendingContentHeight : 0);
                 }
                 view.setStyle('height', textareaContentHeight + 22);
+            }
+
+            function calculatePendingContentHeight(pendingContent) {
+                var pendingContentWidth,
+                    maxAvailableWidth,
+                    rows,
+                    rowHeight = 14,
+                    result
+                    ;
+
+                if (RC.isEmpty(pendingContent)) {
+                    result = rowHeight;
+                } else {
+                    pendingContentWidth = self._calculateWidthOfAString(pendingContent);
+                    maxAvailableWidth = self._getMaxAvailableWidth();
+                    rows = Math.ceil(pendingContentWidth / maxAvailableWidth);
+                    result = rows * rowHeight + (rows - 1) * self.tagSpacing;
+                }
+
+                return result;
             }
         },
         _getTextArea: function() {
@@ -271,7 +286,7 @@
 
             if (view) {
                 textarea = self._getTextArea();
-                x = parseFloat(view.getStyle('padding-left')) + parseFloat(textarea.getStyle('maring-left')) 
+                x = parseFloat(view.getStyle('padding-left')) + parseFloat(textarea.getStyle('margin-left')) 
                     + parseFloat(textarea.getStyle('border-left-width'));
                 y = parseFloat(view.getStyle('padding-top')) + parseFloat(textarea.getStyle('margin-top'))
                     + parseFloat(textarea.getStyle('border-top-width'));
