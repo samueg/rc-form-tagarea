@@ -95,9 +95,8 @@
                 
                 var text = textarea.getProperty('value'),
                     tag = new Tag(text, null),
-                    tagLocation,
-                    cursorLocation,
-                    overflowThreshold;
+                    tagLocation
+                    ;
 
                 tag.compile(view);
                 tagLocation = self._calculateNewTagLocation(tag);
@@ -106,45 +105,15 @@
 
                 textarea.setProperty('value', '');
 
-                overflowThreshold = self._getOverflowThreshold();
-                if (overflowThreshold > 0) {
-                    cursorLocation = tag.getNextColumnTopAlignedSiblingLocation(self.tagSpacing);
-                } else {
-                    cursorLocation = self._getBaseLocation().offset(self.fixedPadding, 0).setY(tag.getNextRowLeftAlignedSiblingLocation(self.tagSpacing).getY());
-                }
-                self._updateCursorLocation(cursorLocation);
-
-                self._updateViewHeight();
+                self._updateView();
             });
 
             textarea.addEvent('pendingContentOverflow', function(event) {
-                var referredTag,
-                    cursorLocation,
-                    viewHeight
-                    ;
-
-                if (self.hasTags() && self._isAvailableSpaceShrinked()) {
-                    referredTag = self.tags.last();
-                    cursorLocation = self._getBaseLocation().offset(self.fixedPadding, 0).setY(referredTag.getNextRowLeftAlignedSiblingLocation(self.tagSpacing).getY());
-                    self._updateCursorLocation(cursorLocation);
-                }
-
-                self._updateViewHeight();
+                self._updateView();
             });
 
             textarea.addEvent('pendingContentNormal', function(event) {
-                var referredTag,
-                    cursorLocation
-                    ;
-
-                if (self.hasTags() && !self._isAvailableSpaceShrinked()) {
-                    referredTag = self.tags.last();
-                    cursorLocation = referredTag.getTailLocation().offset(self.tagSpacing);
-                    self._updateCursorLocation(cursorLocation);                     
-                }
-  
-
-                self._updateViewHeight();
+                self._updateView();
             });
 
             return view;
@@ -219,7 +188,7 @@
 
             return availableWidth != maxAvailableWidth;
         },
-        _updateViewHeight: function() {
+        _updateView: function() {
             var self = this,
                 view = self.getRenderedCanvas(),
                 textareaContentHeight,
@@ -229,7 +198,8 @@
                 endLocation,
                 pendingContent,
                 pendingContentHeight,
-                pendingContentOverflowed
+                pendingContentOverflowed,
+                cursorLocation
                 ;
 
             if (view) {
@@ -248,6 +218,17 @@
                         + (pendingContentOverflowed ? pendingContentHeight : 0);
                 }
                 view.setStyle('height', textareaContentHeight + 22);
+                   
+                // update the cursor location.
+                if (self.hasTags()) {
+                    lastTag = self.tags.last();
+                    if (pendingContentOverflowed) {
+                        cursorLocation = self._getBaseLocation().offset(self.fixedPadding, 0).setY(lastTag.getNextRowLeftAlignedSiblingLocation(self.tagSpacing).getY());
+                    } else {                        
+                        cursorLocation = lastTag.getNextColumnTopAlignedSiblingLocation(self.tagSpacing);
+                    }
+                    self._updateCursorLocation(cursorLocation);
+                } 
             }
 
             function calculatePendingContentHeight(pendingContent) {
