@@ -182,61 +182,7 @@
                 
                 return aString;
             }
-        },
-        _calculateHeightOfAString: function(aString) {
-            var self = this,
-                result = 0,
-                view,
-                ruler
-                ;
-
-            self._requireView();
-
-            view = self.getRenderedCanvas();
-            ruler = new Element('div', {
-                html: replaceSpaces(aString),
-            });
-            ruler.setStyles({
-                fontFamily: 'monospace',
-                fontSize: '14px',                    
-                // visibility: 'hidden',
-                position: 'absolute',
-                left: '400px',
-                top: '0px',
-                border: '0px',
-                padding: '0px',
-                width: Util.pixels(self._getInitialContentDimension().getWidth())/*,
-                wordBreak: 'break-all'*/,
-                wordWrap: 'break-word'
-            });
-            ruler.inject(view);
-            result = Math.ceil(ruler.getSize().y);
-            // ruler.dispose();
-
-            return result;
-
-            function replaceSpaces(aString) {
-                var regExps = [/^\s+/, /\s+$/],
-                    matchResult,
-                    substitution
-                    ;
-
-                aString = aString || '';
-                regExps.each(function(regExp) {
-                    matchResult = aString.match(regExp);
-                    if (matchResult) {
-                        length = matchResult[0].length;
-                        substitution = '';
-                        while (length--) {
-                            substitution += '&nbsp;'
-                        }
-                        aString = aString.replace(regExp, substitution);
-                    }
-                });
-                
-                return aString;
-            }
-        },                
+        },        
         _calculateHeight: function() {
             var self = this,
                 result = 0,
@@ -292,10 +238,8 @@
                     maxAvailableWidth = self._getMaxAvailableWidth();
                     rows = Math.ceil(pendingContentWidth / maxAvailableWidth);
                     result = rows * self.tagHeight + (rows - 1) * self.tagSpacing;*/
-
-/*                    var scrollDimension = Dimension.fromElementSize(self._getTextarea().getScrollSize());
-                    result = scrollDimension.getHeight() - Dimension.fromElementNonContent(self._getTextarea()).getHeight();*/
-                    result = self._calculateHeightOfAString(pendingContent);
+                    var scrollDimension = Dimension.fromElementSize(self._getTextarea().getScrollSize());
+                    result = scrollDimension.getHeight() - Dimension.fromElementNonContent(self._getTextarea()).getHeight();
                 }
 
                 // result = self.tagHeight + (RC.isEmpty(pendingContent) ? 0 : self._getTextarea().getScroll().y);
@@ -440,9 +384,7 @@
                 boxSizing: 'border-box',
                 width: '100%',
                 height: '100%',
-                overflow: 'hidden'/*,
-                wordBreak: 'break-all',
-                wordWrap: 'break-word'*/
+                overflow: 'hidden'
             });
             textarea.inject(view);
             textarea.addEvent('newTagIsGoingToBeCreated', function(event) {
