@@ -24,6 +24,10 @@
 
             return  ('enter' != event.key) && tagArea && tagArea.hasOverflowedPendingContent();
         }
+    };   
+
+    Element.Events.tagOverflow = {
+
     };
 
     Class.Mutators.GetterSetter = function(properties) { 
@@ -44,10 +48,6 @@
         }); 
     };
 
-    Class.Mutators.Static = function(members){
-        this.extend(members);
-    };    
-
     RC.form.TagArea = RC.extend(RC.form.Field, {
         constructor: function(config) {
             var self = this
@@ -57,133 +57,110 @@
             RC.apply(config, {
                 fixedPadding: 10,
                 tagSpacing: 5,
-                tagHeight: 15,
+                tagHeight: 14,
                 tags: new RC.MixedCollection(),
-                minHeight: 37,
+                minHeight: 36,
                 maxHeight: 400
             });
 
             RC.form.TagArea.superclass.constructor.apply(this, [config]);
         },
-        _requireView: function() {
+        render: function() {
             var self = this,
-                view
+                view,
+                textarea;
+
+            view = new Element('div', {
+                id: self.getId() + '-view'
+            });
+            view.setStyles({
+                position: 'relative',
+                height: pixels(self.minHeight)
+            });
+
+            textarea = new Element('textarea');
+            textarea.tagArea = self;
+            textarea.setStyles({
+                fontFamily: 'monospace',
+                fontSize: '14px',
+                resize: 'none',
+                padding: pixels(self.fixedPadding),
+                boxSizing: 'border-box',
+                width: '100%',
+                height: '100%',
+                overflow: 'hidden'
+            });
+            textarea.inject(view);
+            textarea.addEvent('newTagIsGoingToBeCreated', function(event) {
+                event.preventDefault();
+                
+                var text = textarea.getProperty('value'),
+                    tag = new Tag(text, null),
+                    tagLocation,
+                    maxAvailableWidth = self._getMaxAvailableWidth()
+                    ;
+
+                tag.compile(view);
+                tagLocation = self._calculateNewTagLocation(tag);
+                tag.setLocation(tagLocation);
+                if (tag.getDimension().getWidth() > maxAvailableWidth) {
+                    tag.setMaxWidth(maxAvailableWidth);
+                }
+                self.tags.add(tag);
+
+                textarea.setProperty('value', '');
+
+                self._updateView();
+            });
+
+            textarea.addEvent('pendingContentOverflow', function(event) {
+                self._updateView();
+            });
+
+            textarea.addEvent('pendingContentNormal', function(event) {
+                self._updateView();
+            });
+
+            return view;
+        },
+        getId: function() {
+            return this.id;
+        },
+        getDimension: function() {
+            var self = this,
+                result = new Dimension(),
+                view = self.getRenderedCanvas(),
+                size
                 ;
 
-            view = self.getRenderedCanvas();
-            if (!view) {
-                throw 'TagArea is not rendered.'
+            if (view) {
+                size = view.getSize();
+                result = new Dimension(size.x, size.y);
             }
+
+            return result;
+        },        
+        hasTags: function() {
+            var self = this
+                ;
+
+            return self.tags.length > 0;
+        },
+        getPendingContent: function() {
+            var self = this,
+                textarea = self._getTextarea()
+                ;
+
+            return textarea ? textarea.getProperty('value') : '';
         },
         _getTextarea: function() {
             var self = this,
-                view
+                view = self.getRenderedCanvas()
                 ;
 
-            self._requireView();
-
-            view = self.getRenderedCanvas();
-
-            return view.getElement('textarea');
-        },        
-        _getBaseLocation: function() {
-            var self = this,
-                view,
-                textarea
-                ;
-
-            self._requireView();
-
-            view = self.getRenderedCanvas();
-            textarea = self._getTextarea();
-            x = parseFloat(view.getStyle('padding-left')) + parseFloat(textarea.getStyle('margin-left')) 
-                + parseFloat(textarea.getStyle('border-left-width'));
-            y = parseFloat(view.getStyle('padding-top')) + parseFloat(textarea.getStyle('margin-top'))
-                + parseFloat(textarea.getStyle('border-top-width'));
-
-            return new Location(x, y);
+            return view ? view.getElement('textarea') : null;
         },         
-        _getInitialContentDimension: function() {
-            var self = this,
-                textarea,
-                paddings = {
-                    top: self.fixedPadding,
-                    right: self.fixedPadding,
-                    bottom: self.fixedPadding,
-                    left: self.fixedPadding
-                }
-                ;
-
-            textarea =  self._getTextarea();
-
-            return Dimension.fromElementContent(textarea, paddings);  
-        },
-        _getInitialNonContentDimension: function() {
-            var self = this,
-                textarea,
-                paddings = {
-                    top: self.fixedPadding,
-                    right: self.fixedPadding,
-                    bottom: self.fixedPadding,
-                    left: self.fixedPadding
-                }
-                ;
-
-            textarea =  self._getTextarea();
-
-            return Dimension.fromElementNonContent(textarea, paddings);  
-        },        
-        _calculateWidthOfAString: function(aString) {
-            var self = this,
-                result = 0,
-                view,
-                ruler
-                ;
-
-            self._requireView();
-
-            view = self.getRenderedCanvas();
-            ruler = new Element('span', {
-                html: replaceSpaces(aString),
-            });
-            ruler.setStyles({
-                fontFamily: 'monospace',
-                fontSize: '14px',                    
-                visibility: 'hidden',
-                position: 'absolute',
-                left: '0px',
-                top: '0px',
-                whiteSpace: 'nowrap'
-            });
-            ruler.inject(view);
-            result = Math.ceil(ruler.getSize().x);
-            ruler.dispose();
-
-            return result;
-
-            function replaceSpaces(aString) {
-                var regExps = [/^\s+/, /\s+$/],
-                    matchResult,
-                    substitution
-                    ;
-
-                aString = aString || '';
-                regExps.each(function(regExp) {
-                    matchResult = aString.match(regExp);
-                    if (matchResult) {
-                        length = matchResult[0].length;
-                        substitution = '';
-                        while (length--) {
-                            substitution += '&nbsp;'
-                        }
-                        aString = aString.replace(regExp, substitution);
-                    }
-                });
-                
-                return aString;
-            }
-        },        
-        _calculateHeight: function() {
+        _calculateTextareaContentHeight: function() {
             var self = this,
                 result = 0,
                 firstTag,
@@ -192,35 +169,25 @@
                 endLocation,
                 tagsHeight = 0,
                 pendingContent,
-                pendingContentHeight,
-                dimension,
-                textarea,
-                initialContentDimension
+                pendingContentHeight
                 ;
 
-            pendingContent = self.getPendingContent();
-            pendingContentHeight = calculatePendingContentHeight(pendingContent);
-
-            if (!self.hasTags()) {
-                result = pendingContentHeight;                
-            } else {
+            if (self.hasTags()) {
                 firstTag = self.tags.first();
                 startLocation = firstTag.getLocation();
                 lastTag = self.tags.last();
                 endLocation = lastTag.getNextRowLeftAlignedSiblingLocation();
                 tagsHeight = endLocation.getDifference(startLocation).getHeight();
-                result = tagsHeight;
-
-                if (self.hasOverflowedPendingContent()) {
-                    result += (self.tagSpacing + pendingContentHeight);
-                }
+                result += tagsHeight;
             }
 
-/*            dimension = self.getDimension();
-            textarea = self._getTextarea();
-            initialContentDimension = self._getInitialContentDimension();
-            fixedHeight =  dimension.getHeight() - initialContentDimension.getHeight();*/
-            result += self._getInitialNonContentDimension().getHeight();
+            if (self.hasOverflowedPendingContent()) {
+                result += self.tagSpacing;
+            }
+
+            pendingContent = self.getPendingContent();
+            pendingContentHeight = calculatePendingContentHeight(pendingContent);
+            result += pendingContentHeight;
 
             return result;
 
@@ -234,56 +201,15 @@
                 if (RC.isEmpty(pendingContent)) {
                     result = self.tagHeight;
                 } else {
-/*                    pendingContentWidth = self._calculateWidthOfAString(pendingContent);
+                    pendingContentWidth = self._calculateWidthOfAString(pendingContent);
                     maxAvailableWidth = self._getMaxAvailableWidth();
                     rows = Math.ceil(pendingContentWidth / maxAvailableWidth);
-                    result = rows * self.tagHeight + (rows - 1) * self.tagSpacing;*/
-                    var scrollDimension = Dimension.fromElementSize(self._getTextarea().getScrollSize());
-                    result = scrollDimension.getHeight() - Dimension.fromElementNonContent(self._getTextarea()).getHeight();
+                    result = rows * self.tagHeight + (rows - 1) * self.tagSpacing;
                 }
-
-                // result = self.tagHeight + (RC.isEmpty(pendingContent) ? 0 : self._getTextarea().getScroll().y);
 
                 return result;             
             }
-        },  
-        _calculateCursorLocation: function() {
-            var self = this,
-                result,
-                baseLocation = self._getBaseLocation(),
-                lastTag,
-                pendingContentOverflowed
-                ;
-
-            if (!self.hasTags()) {
-                result = baseLocation.offset(self.fixedPadding, self.fixedPadding);
-            } else {
-                lastTag = self.tags.last();
-                pendingContentOverflowed = self.hasOverflowedPendingContent();
-                if (pendingContentOverflowed) {
-                    result = baseLocation.offset(self.fixedPadding, 0).setY(lastTag.getNextRowLeftAlignedSiblingLocation(self.tagSpacing).getY());
-                } else {                        
-                    result = lastTag.getNextColumnTopAlignedSiblingLocation(self.tagSpacing);
-                }
-            }
-
-            return result;
-        },
-        _updateCursorLocation: function(cursorLocation) {
-            var self = this,
-                textarea,
-                baseLocation,
-                difference
-                ;
-
-            textarea = self._getTextarea();
-            baseLocation = self._getBaseLocation();
-            difference = cursorLocation.getDifference(baseLocation);
-            textarea.setStyles({
-                paddingLeft: Util.pixels(difference.getWidth()),
-                paddingTop: Util.pixels(difference.getHeight())
-            });
-        },        
+        },            
         _getOverflowThreshold: function() {
             var self = this,
                 result = 0,
@@ -307,144 +233,7 @@
             }
 
             return Math.max(result, 0);
-        },
-        _isAvailableSpaceShrinked: function() {
-            var self = this,
-                availableWidth,
-                maxAvailableWidth,
-                pendingContentWidth
-                ;
-
-            availableWidth = self._getAvailableWidth();
-            maxAvailableWidth = self._getMaxAvailableWidth();
-
-            return availableWidth != maxAvailableWidth;
-        },       
-        _getAvailableWidth: function() {
-            var self = this,
-                textarea = self._getTextarea()
-                ;
-
-            return Dimension.fromElementContent(textarea).getWidth();
-        },
-        _getMaxAvailableWidth: function() {
-            var self = this
-                ;
-
-            return self._getInitialContentDimension().getWidth();        
-        },
-        _calculateNewTagLocation: function(newTag) {
-            var self = this,
-                result = self._getBaseLocation(),
-                textarea,
-                leftPadding,
-                topPadding,
-                tagWidth,
-                overflowThreshold,
-                lastTag
-                ;
-
-            overflowThreshold = self._getOverflowThreshold();
-            tagWidth = newTag.getDimension().getWidth();
-            console.log('overflowThreshold/newTagWidth: ' + overflowThreshold + '/' + tagWidth);
-            if (!self.hasTags() || tagWidth > overflowThreshold) {
-                textarea = self._getTextarea();
-                if (textarea) {
-                    leftPadding = parseFloat(textarea.getStyle('padding-left'));
-                    topPadding = parseFloat(textarea.getStyle('padding-top'));
-                    result = result.offset(leftPadding, topPadding);
-                }
-            } else {
-                lastTag = self.tags.last();
-                result = lastTag.getNextColumnTopAlignedSiblingLocation(self.tagSpacing);
-            } 
-
-            return result;
-        },
-        render: function() {
-            var self = this,
-                view,
-                textarea;
-
-            view = new Element('div', {
-                id: self.getId() + '-view'
-            });
-            view.setStyles({
-                position: 'relative',
-                height: Util.pixels(self.minHeight)
-            });
-
-            textarea = new Element('textarea');
-            textarea.tagArea = self;
-            textarea.setStyles({
-                fontFamily: 'monospace',
-                fontSize: '14px',
-                resize: 'none',
-                padding: Util.pixels(self.fixedPadding),
-                boxSizing: 'border-box',
-                width: '100%',
-                height: '100%',
-                overflow: 'hidden'
-            });
-            textarea.inject(view);
-            textarea.addEvent('newTagIsGoingToBeCreated', function(event) {
-                event.preventDefault();
-                
-                var text = textarea.getProperty('value'),
-                    tag = new Tag(text, null),
-                    tagLocation,
-                    maxAvailableWidth = self._getMaxAvailableWidth()
-                    ;
-
-                tag.compile(view);
-                tagLocation = self._calculateCursorLocation();
-                tag.setLocation(tagLocation);
-                if (tag.getDimension().getWidth() > maxAvailableWidth) {
-                    tag.setMaxWidth(maxAvailableWidth);
-                }
-                self.tags.add(tag);
-
-                textarea.setProperty('value', '');
-
-                self.refresh();
-            });
-
-            textarea.addEvent('pendingContentOverflow', function(event) {
-                self.refresh();
-            });
-
-            textarea.addEvent('pendingContentNormal', function(event) {
-                self.refresh();
-            });
-
-            return view;
         },        
-        getId: function() {
-            return this.id;
-        },
-        getDimension: function() {
-            var self = this,
-                view
-                ;
-
-            self._requireView();
-            view = self.getRenderedCanvas();
-
-            return Dimension.fromElement(view);
-        },        
-        hasTags: function() {
-            var self = this
-                ;
-
-            return self.tags.length > 0;
-        },
-        getPendingContent: function() {
-            var self = this,
-                textarea = self._getTextarea()
-                ;
-
-            return textarea ? textarea.getProperty('value') : '';
-        },
         hasOverflowedPendingContent: function() {
             var self = this,
                 overflowThreshold,          
@@ -462,20 +251,219 @@
             console.log('overflowThreshold/pendingContentWidth: ' + overflowThreshold + '/' + pendingContentWidth);
             return pendingContentWidth > overflowThreshold;
         },
-        refresh: function() {
+        _isAvailableSpaceShrinked: function() {
             var self = this,
-                view,
+                availableWidth,
+                maxAvailableWidth,
+                pendingContentWidth
+                ;
+
+            availableWidth = self._getAvailableWidth();
+            maxAvailableWidth = self._getMaxAvailableWidth();
+
+            return availableWidth != maxAvailableWidth;
+        },
+        _updateView: function() {
+            var self = this,
+                view = self.getRenderedCanvas(),
+                viewDecorationHeight,
+                textareaContentHeight,
+                firstTag,
+                startLocation,
+                lastTag,
+                endLocation,
+                pendingContent,
+                pendingContentHeight,
+                pendingContentOverflowed,
                 cursorLocation
                 ;
 
-            self._requireView();
+            if (view) {
+                // update height
+                pendingContent = self.getPendingContent();
+                pendingContentHeight = calculatePendingContentHeight(pendingContent);
+                pendingContentOverflowed = self.hasOverflowedPendingContent();
+                if (!self.hasTags()) {
+                    textareaContentHeight = pendingContentHeight;
+                } else {
+                    firstTag = self.tags.first();
+                    startLocation = firstTag.getLocation();
+                    lastTag = self.tags.last();
+                    endLocation = lastTag.getNextRowLeftAlignedSiblingLocation(pendingContentOverflowed ? self.tagSpacing : 0);                    
+                    textareaContentHeight = endLocation.getDifference(startLocation).getHeight() 
+                        + (pendingContentOverflowed ? pendingContentHeight : 0);
+                }
+                viewDimension = self.getDimension();
+                viewContentDimentsion = getContentDimension(view);
+                view.setStyle('height', textareaContentHeight + 22);
+                   
+                // update the cursor location.
+                if (self.hasTags()) {
+                    lastTag = self.tags.last();
+                    if (pendingContentOverflowed || (self._getOverflowThreshold() == 0)) {
+                        cursorLocation = self._getBaseLocation().offset(self.fixedPadding, 0).setY(lastTag.getNextRowLeftAlignedSiblingLocation(self.tagSpacing).getY());
+                    } else {                        
+                        cursorLocation = lastTag.getNextColumnTopAlignedSiblingLocation(self.tagSpacing);
+                    }
+                    self._updateCursorLocation(cursorLocation);
+                } 
+            }
 
-            cursorLocation = self._calculateCursorLocation();
-            self._updateCursorLocation(cursorLocation);
+            function calculatePendingContentHeight(pendingContent) {
+                var pendingContentWidth,
+                    maxAvailableWidth,
+                    rows,
+                    rowHeight = 14,
+                    result
+                    ;
 
-            view = self.getRenderedCanvas();
-            view.setStyle('height', self._calculateHeight());
-        }                             
+                if (RC.isEmpty(pendingContent)) {
+                    result = rowHeight;
+                } else {
+                    pendingContentWidth = self._calculateWidthOfAString(pendingContent);
+                    maxAvailableWidth = self._getMaxAvailableWidth();
+                    rows = Math.ceil(pendingContentWidth / maxAvailableWidth);
+                    result = rows * rowHeight + (rows - 1) * self.tagSpacing;
+                }
+
+                return result;
+            }
+        },
+        _getBaseLocation: function() {
+            var self = this,
+                result = new Location(),
+                view = self.getRenderedCanvas(),
+                textarea
+                ;
+
+            if (view) {
+                textarea = self._getTextarea();
+                x = parseFloat(view.getStyle('padding-left')) + parseFloat(textarea.getStyle('margin-left')) 
+                    + parseFloat(textarea.getStyle('border-left-width'));
+                y = parseFloat(view.getStyle('padding-top')) + parseFloat(textarea.getStyle('margin-top'))
+                    + parseFloat(textarea.getStyle('border-top-width'));
+                result = new Location(x, y);
+            }
+
+            return result;
+        },        
+        _getAvailableWidth: function() {
+            var self = this,
+                textarea = self._getTextarea()
+                ;
+
+            return textarea ? getContentDimension(textarea).getWidth() : 0;
+        },
+        _getMaxAvailableWidth: function() {
+            var self = this,
+                textarea = self._getTextarea(),
+                paddings = {
+                    top: self.fixedPadding,
+                    right: self.fixedPadding,
+                    bottom: self.fixedPadding,
+                    left: self.fixedPadding
+                }
+                ;
+
+            return textarea ? getContentDimension(textarea, paddings).getWidth() : 0;            
+        },
+        _calculateWidthOfAString: function(aString) {
+            var self = this,
+                result = 0,
+                view = self.getRenderedCanvas(),
+                ruler
+                ;
+
+            if (view) {
+                ruler = new Element('span', {
+                    id: getRulerId(),
+                    html: replaceSpaces(aString),
+                });
+                ruler.setStyles({
+                    fontFamily: 'monospace',
+                    fontSize: '14px',                    
+                    visibility: 'hidden',
+                    position: 'absolute',
+                    whiteSpace: 'nowrap'
+                });
+                ruler.inject(view);
+                result = Math.ceil(ruler.getSize().x);
+                ruler.dispose();
+            }
+
+            return result;
+
+            function getRulerId() {
+                return self.getId() + '-ruler';
+            }
+
+            function replaceSpaces(aString) {
+                var regExps = [/^\s+/, /\s+$/],
+                    matchResult,
+                    substitution
+                    ;
+
+                aString = aString || '';
+                regExps.each(function(regExp) {
+                    matchResult = aString.match(regExp);
+                    if (matchResult) {
+                        length = matchResult[0].length;
+                        substitution = '';
+                        while (length--) {
+                            substitution += '&nbsp;'
+                        }
+                        aString = aString.replace(regExp, substitution);
+                    }
+                });
+                
+                return aString;
+            }
+        },
+        _calculateNewTagLocation: function(newTag) {
+            var self = this,
+                result = self._getBaseLocation(),
+                textarea,
+                leftPadding,
+                topPadding,
+                tagWidth,
+                overflowThreshold,
+                lastTag
+                ;
+
+            overflowThreshold = self._getOverflowThreshold();
+            tagWidth = newTag.getDimension().getWidth();
+            console.log('overflowThreshold/New tag width: ' + overflowThreshold + '/' + tagWidth);
+            if (!self.hasTags() || tagWidth > overflowThreshold) {
+                textarea = self._getTextarea();
+                if (textarea) {
+                    leftPadding = parseFloat(textarea.getStyle('padding-left'));
+                    topPadding = parseFloat(textarea.getStyle('padding-top'));
+                    result = result.offset(leftPadding, topPadding);
+                }
+            } else {
+                lastTag = self.tags.last();
+                result = lastTag.getNextColumnTopAlignedSiblingLocation(self.tagSpacing);
+            } 
+
+            return result;
+        },
+        _updateCursorLocation: function(cursorLocation) {
+            var self = this,
+                textarea,
+                baseLocation,
+                difference
+                ;
+
+            textarea = self._getTextarea();
+            if (textarea) {
+                baseLocation = self._getBaseLocation();
+                difference = cursorLocation.getDifference(baseLocation);
+                textarea.setStyles({
+                    paddingLeft: pixels(difference.getWidth()),
+                    paddingTop: pixels(difference.getHeight())
+                });
+            }
+        }        
     });
 
     var Tag = RC.extend(RC.Element, {
@@ -489,79 +477,32 @@
             };
             RC.apply(this, config);
         },
-        _requireView: function() {
-            var self = this,
-                view
-                ;
-
-            view = self.getRenderedCanvas();
-            if (!view) {
-                throw 'Tag is not rendered.'
-            }
-        },   
         render: function() {
             var self = this, 
-                view,
-                textView,
-                deleteIconView
-                ;
+                view, textSpan, deleteIconSpan;
 
             view = new Element('div');
             view.setStyles({
                 backgroundColor: self.backgroundColor,
-                display: 'block',
+                display: 'inline-block',
                 position: 'absolute',
-                left: '0px',
-                top: '0px',
-                height: '15px'/*,
                 overflow: 'hidden',
-                textOverflow: 'ellipsis',                */
+                textOverflow: 'ellipsis'
             });
             
-/*            self.textView = textView = (new Element('span', {
+            textSpan = new Element('span', {
+                id: self.getId() + '-textSpan',
                 html: self.text
-            })).inject(view);
-            textView.setStyles({
-                display: 'inline-block',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                maxWidth: '332px'
-            });   
-            textView.setStyles({
-                whiteSpace: 'nowrap'
-            });             
-
-            deleteIconView = (new Element('span', {
-                html: '&times;'
-            })).inject(view);
-            deleteIconView.setStyles({
-                display: 'inline-block',
-                width: '20px',
-                textAlign: 'center'
             });
-
-            Util.enableSmartTooltip(textView);*/
-
-            var tableView = (new Element('table', {
-                cellSpacing: '0px',
-                cellPadding: '0px'
-            })).inject(view);
-            var tableRowView = (new Element('tr')).inject(tableView);
-            textView = (new Element('td', {
-                html: self.text
-            })).inject(tableRowView);
-            textView.setStyles({
+            textSpan.setStyles({
                 whiteSpace: 'nowrap'
-            });            
+            });
+            textSpan.inject(view);
 
-            deleteIconView = (new Element('td', {
+            deleteIconSpan = new Element('span', {
                 html: '&times;'
-            })).inject(tableRowView);
-            deleteIconView.setStyles({
-                paddingLeft: '20px',
-                textAlign: 'center'
-            });            
+            });
+            deleteIconSpan.inject(view);
 
             return view;
         },
@@ -610,29 +551,43 @@
         },        
         getDimension: function() {
             var self = this,
-                view
+                result = new Dimension(),
+                view = self.getRenderedCanvas(),
+                size
                 ;
 
-            self._requireView();
-            view = self.getRenderedCanvas();
+            if (view) {
+                size = view.getSize();
+                result = new Dimension(size.x, size.y);
+            }
 
-            return Dimension.fromElement(view);
+            return result;
         },
         setMaxWidth: function(maxWidth) {
             var self = this,
                 view,
                 viewDimension,
                 viewContentDimension,
-                fixedWidth
+                decorationWidth
                 ;
 
             self._requireView();
 
             view = self.getRenderedCanvas();
             viewDimension = self.getDimension();
-            viewContentDimension = Dimension.fromElementContent(view);
-            fixedWidth = viewDimension.getWidth() - viewContentDimension.getWidth();
-            view.setStyle('max-width', Util.pixels(maxWidth - fixedWidth));
+            viewContentDimension = getContentDimension(view);
+            decorationWidth = viewDimension.getWidth() - viewContentDimension.getWidth();
+            view.setStyle('max-width', pixels(maxWidth - decorationWidth));
+        },
+        _requireView: function() {
+            var self = this,
+                view
+                ;
+
+            view = self.getRenderedCanvas();
+            if (!view) {
+                throw 'Tag is not rendered.'
+            }
         }
     });
 
@@ -670,66 +625,6 @@
 
     var Dimension = new Class({
         GetterSetter: ['width', 'height'],
-        Static: {
-            fromElement: function(element) {
-                size = element.getSize();
-                return Dimension.fromElementSize(size);
-            },
-            fromElementSize: function(size) {
-                return new Dimension(size.x, size.y);
-            },
-            fromElementContent: function(element, paddings, borderWidths) {
-                var size,
-                    leftBorderWidth,
-                    leftPadding,
-                    rightBorderWidth,
-                    rightPadding,
-                    topBorderWidth,
-                    topPadding,
-                    bottomBorderWidth,
-                    bottomPadding,
-                    width,
-                    height
-                    ;
-
-                paddings = paddings || {};
-                borderWidths = borderWidths || {};
-
-                size = element.getSize();
-                leftBorderWidth = borderWidths.left || parseFloat(element.getStyle('border-left-width'));
-                leftPadding = paddings.left || parseFloat(element.getStyle('padding-left'));
-                rightBorderWidth = borderWidths.right || parseFloat(element.getStyle('border-right-width'));
-                rightPadding = paddings.right || parseFloat(element.getStyle('padding-right'));
-                topBorderWidth = borderWidths.top || parseFloat(element.getStyle('border-top-width'));
-                topPadding = paddings.top || parseFloat(element.getStyle('padding-top'));
-                bottomBorderWidth = borderWidths.bottom || parseFloat(element.getStyle('border-bottom-width'));
-                bottomPadding = paddings.bottom || parseFloat(element.getStyle('padding-bottom'));
-                        
-                        
-                width = size.x - leftBorderWidth - leftPadding - rightBorderWidth - rightPadding;
-                height = size.y - topBorderWidth - topPadding - bottomBorderWidth - bottomPadding;
-                return new Dimension(width, height);
-            },
-            fromElementNonContent: function(element, paddings, borderWidths) {
-                var width,
-                    height
-                    ;
-
-                paddings = paddings || {};
-                borderWidths = borderWidths || {};
-
-                width = (borderWidths.left || parseFloat(element.getStyle('border-left-width'))) + 
-                         (paddings.left || parseFloat(element.getStyle('padding-left'))) +
-                         (paddings.right || parseFloat(element.getStyle('padding-right'))) +
-                         (borderWidths.right || parseFloat(element.getStyle('border-right-width')));
-
-                height = (borderWidths.top || parseFloat(element.getStyle('border-top-width'))) + 
-                         (paddings.top || parseFloat(element.getStyle('padding-top'))) +
-                         (paddings.bottom || parseFloat(element.getStyle('padding-bottom'))) +
-                         (borderWidths.bottom || parseFloat(element.getStyle('border-bottom-width')));
-                return new Dimension(width, height);
-            }
-        },
         initialize: function(width, height) {
             this.setWidth(width || 0);
             this.setHeight(height || 0);
@@ -745,27 +640,63 @@
         }
     });
 
-    var Util = new Class({
-        Static: {
-            pixels: function(value) {
-                value = parseInt(value);
-                return isNaN(value) ? '0px' : (value + 'px');
-            },
-            enableSmartTooltip: function(targetElement) {
-                if (!RC.isMooElement(targetElement)) return;
+    function pixels(value) {
+        value = parseInt(value);
+        return isNaN(value) ? '0px' : (value + 'px');
+    }
 
-                targetElement.addEvent('mouseenter', function() {
-                    var offsetWidth = targetElement.getSize().x;
-                    var scrollWidth = targetElement.getScrollSize().x;
-                    var title = offsetWidth < scrollWidth ? targetElement.get('text') : '';
-                    targetElement.set('title', title);
-                });
-            }           
-        },
-        initialize: function() {
-            throw 'Util can not be instantiated.';
-        }
-    });
+    function calculateTagDimension(tagArea, tag) {
+        return new Dimension();
+    }
+
+    function getContentLocation(element, paddings, borderWidths) {
+        var x,
+            y
+            ;
+
+        paddings = paddings || {};
+        borderWidths = borderWidths || {};
+
+        x = (borderWidths.left || parseFloat(element.getStyle('border-left-width'))) 
+                + (paddings.left || parseFloat(element.getStyle('padding-left')));
+        y = (borderWidths.top || parseFloat(element.getStyle('border-top-width')))
+                + (paddings.top || parseFloat(element.getStyle('padding-top')));
+
+        return new Location(x, y);
+    }
+
+    function getContentDimension(element, paddings, borderWidths) {
+        var size,
+            leftBorderWidth,
+            leftPadding,
+            rightBorderWidth,
+            rightPadding,
+            topBorderWidth,
+            topPadding,
+            bottomBorderWidth,
+            bottomPadding,
+            width,
+            height
+            ;
+
+        paddings = paddings || {};
+        borderWidths = borderWidths || {};
+
+        size = element.getSize();
+        leftBorderWidth = borderWidths.left || parseFloat(element.getStyle('border-left-width'));
+        leftPadding = paddings.left || parseFloat(element.getStyle('padding-left'));
+        rightBorderWidth = borderWidths.right || parseFloat(element.getStyle('border-right-width'));
+        rightPadding = paddings.right || parseFloat(element.getStyle('padding-right'));
+        topBorderWidth = borderWidths.top || parseFloat(element.getStyle('border-top-width'));
+        topPadding = paddings.top || parseFloat(element.getStyle('padding-top'));
+        bottomBorderWidth = borderWidths.bottom || parseFloat(element.getStyle('border-bottom-width'));
+        bottomPadding = paddings.bottom || parseFloat(element.getStyle('padding-bottom'));
+                
+                
+        width = size.x - leftBorderWidth - leftPadding - rightBorderWidth - rightPadding;
+        height = size.y - topBorderWidth - topPadding - bottomBorderWidth - bottomPadding;
+        return new Dimension(width, height);
+    }
 })();
 
 RC.reg('x-form-tagarea', RC.form.TagArea);
