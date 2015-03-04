@@ -182,20 +182,76 @@
                 
                 return aString;
             }
-        },        
+        },
+        _calculateHeightOfAString: function(aString) {
+            var self = this,
+                result = 0,
+                view,
+                ruler
+                ;
+
+            self._requireView();
+
+            view = self.getRenderedCanvas();
+            ruler = new Element('div', {
+                // html: replaceSpaces(aString),
+                html: handleString(aString)
+            });
+            ruler.setStyles({
+                fontFamily: 'monospace',
+                fontSize: '14px',  
+                width: Util.pixels(self._getInitialContentDimension().getWidth()),
+                // visibility: 'hidden',
+                position: 'absolute',
+                left: '400px',
+                top: '0px',
+                whiteSpace: 'pre-wrap',
+                wordWrap: 'break-word'
+            });
+            ruler.inject(view);
+            result = Math.ceil(ruler.getSize().y);
+            // ruler.dispose();
+
+            return result;
+
+            function replaceSpaces(aString) {
+                var regExps = [/^\s+/, /\s+$/],
+                    matchResult,
+                    substitution
+                    ;
+
+                aString = aString || '';
+                regExps.each(function(regExp) {
+                    matchResult = aString.match(regExp);
+                    if (matchResult) {
+                        length = matchResult[0].length;
+                        substitution = '';
+                        while (length--) {
+                            substitution += '&nbsp;'
+                        }
+                        aString = aString.replace(regExp, substitution);
+                    }
+                });
+                
+                return aString;
+            }
+
+            function handleString(aString) {
+                aString = aString.replace(/</g, '&lt;');
+                aString = aString.replace(/>/g, '&gt;');
+                return aString;
+            }
+        },                 
         _calculateHeight: function() {
             var self = this,
                 result = 0,
+                pendingContent,
+                pendingContentHeight,                
                 firstTag,
                 startLocation,
                 lastTag,
                 endLocation,
-                tagsHeight = 0,
-                pendingContent,
-                pendingContentHeight,
-                dimension,
-                textarea,
-                initialContentDimension
+                tagsHeight
                 ;
 
             pendingContent = self.getPendingContent();
@@ -216,33 +272,25 @@
                 }
             }
 
-/*            dimension = self.getDimension();
-            textarea = self._getTextarea();
-            initialContentDimension = self._getInitialContentDimension();
-            fixedHeight =  dimension.getHeight() - initialContentDimension.getHeight();*/
             result += self._getInitialNonContentDimension().getHeight();
 
             return result;
 
             function calculatePendingContentHeight(pendingContent) {
                 var result,
-                    pendingContentWidth,
-                    maxAvailableWidth,
-                    rows
+                    scrollDimension
                     ;
 
                 if (RC.isEmpty(pendingContent)) {
                     result = self.tagHeight;
                 } else {
-/*                    pendingContentWidth = self._calculateWidthOfAString(pendingContent);
-                    maxAvailableWidth = self._getMaxAvailableWidth();
-                    rows = Math.ceil(pendingContentWidth / maxAvailableWidth);
-                    result = rows * self.tagHeight + (rows - 1) * self.tagSpacing;*/
-                    var scrollDimension = Dimension.fromElementSize(self._getTextarea().getScrollSize());
-                    result = scrollDimension.getHeight() - Dimension.fromElementNonContent(self._getTextarea()).getHeight();
+/*                    scrollDimension = Dimension.fromElementSize(self._getTextarea().getScrollSize());
+                    result = scrollDimension.getHeight() - Dimension.fromElementNonContent(self._getTextarea(), null, {
+                        top: 0,
+                        bottom: 0
+                    }).getHeight();*/
+                    result = self._calculateHeightOfAString(pendingContent);
                 }
-
-                // result = self.tagHeight + (RC.isEmpty(pendingContent) ? 0 : self._getTextarea().getScroll().y);
 
                 return result;             
             }
@@ -696,18 +744,18 @@
                 borderWidths = borderWidths || {};
 
                 size = element.getSize();
-                leftBorderWidth = borderWidths.left || parseFloat(element.getStyle('border-left-width'));
-                leftPadding = paddings.left || parseFloat(element.getStyle('padding-left'));
-                rightBorderWidth = borderWidths.right || parseFloat(element.getStyle('border-right-width'));
-                rightPadding = paddings.right || parseFloat(element.getStyle('padding-right'));
-                topBorderWidth = borderWidths.top || parseFloat(element.getStyle('border-top-width'));
-                topPadding = paddings.top || parseFloat(element.getStyle('padding-top'));
-                bottomBorderWidth = borderWidths.bottom || parseFloat(element.getStyle('border-bottom-width'));
-                bottomPadding = paddings.bottom || parseFloat(element.getStyle('padding-bottom'));
-                        
+                leftBorderWidth = Util.choosePixels(borderWidths.left, element.getStyle('border-left-width'));
+                leftPadding = Util.choosePixels(paddings.left, element.getStyle('padding-left'));
+                rightBorderWidth = Util.choosePixels(borderWidths.right, element.getStyle('border-right-width'));
+                rightPadding = Util.choosePixels(paddings.right, element.getStyle('padding-right'));
+                topBorderWidth = Util.choosePixels(borderWidths.top, element.getStyle('border-top-width'));
+                topPadding = Util.choosePixels(paddings.top, element.getStyle('padding-top'));
+                bottomBorderWidth = Util.choosePixels(borderWidths.bottom, element.getStyle('border-bottom-width'));
+                bottomPadding = Util.choosePixels(paddings.bottom, element.getStyle('padding-bottom'));
                         
                 width = size.x - leftBorderWidth - leftPadding - rightBorderWidth - rightPadding;
                 height = size.y - topBorderWidth - topPadding - bottomBorderWidth - bottomPadding;
+
                 return new Dimension(width, height);
             },
             fromElementNonContent: function(element, paddings, borderWidths) {
@@ -718,15 +766,16 @@
                 paddings = paddings || {};
                 borderWidths = borderWidths || {};
 
-                width = (borderWidths.left || parseFloat(element.getStyle('border-left-width'))) + 
-                         (paddings.left || parseFloat(element.getStyle('padding-left'))) +
-                         (paddings.right || parseFloat(element.getStyle('padding-right'))) +
-                         (borderWidths.right || parseFloat(element.getStyle('border-right-width')));
+                width = Util.choosePixels(borderWidths.left, element.getStyle('border-left-width')) + 
+                        Util.choosePixels(paddings.left, element.getStyle('padding-left')) +
+                        Util.choosePixels(paddings.right, element.getStyle('padding-right')) +
+                        Util.choosePixels(borderWidths.right, element.getStyle('border-right-width'));
 
-                height = (borderWidths.top || parseFloat(element.getStyle('border-top-width'))) + 
-                         (paddings.top || parseFloat(element.getStyle('padding-top'))) +
-                         (paddings.bottom || parseFloat(element.getStyle('padding-bottom'))) +
-                         (borderWidths.bottom || parseFloat(element.getStyle('border-bottom-width')));
+                height = Util.choosePixels(borderWidths.top, element.getStyle('border-top-width')) + 
+                         Util.choosePixels(paddings.top, element.getStyle('padding-top')) +
+                         Util.choosePixels(paddings.bottom, element.getStyle('padding-bottom')) +
+                         Util.choosePixels(borderWidths.bottom, element.getStyle('border-bottom-width'));
+
                 return new Dimension(width, height);
             }
         },
@@ -760,7 +809,13 @@
                     var title = offsetWidth < scrollWidth ? targetElement.get('text') : '';
                     targetElement.set('title', title);
                 });
-            }           
+            },
+            choosePixels: function(pxiels1, pixels2) {
+                pxiels1 = parseFloat(pxiels1);
+                pixels2 = parseFloat(pixels2);
+
+                return isNaN(pxiels1) ? (isNaN(pixels2) ? 0 : pixels2) : pxiels1;
+            }          
         },
         initialize: function() {
             throw 'Util can not be instantiated.';
