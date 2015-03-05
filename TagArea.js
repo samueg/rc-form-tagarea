@@ -57,9 +57,9 @@
             RC.apply(config, {
                 fixedPadding: 10,
                 tagSpacing: 5,
-                tagHeight: 15,
+                tagHeight: 17,
                 tags: new RC.MixedCollection(),
-                minHeight: 37,
+                minHeight: 39,
                 maxHeight: 400
             });
 
@@ -194,14 +194,13 @@
 
             view = self.getRenderedCanvas();
             ruler = new Element('div', {
-                // html: replaceSpaces(aString),
-                html: handleString(aString)
+                html: Util.htmlEntities(aString)
             });
             ruler.setStyles({
                 fontFamily: 'monospace',
                 fontSize: '14px',  
                 width: Util.pixels(self._getInitialContentDimension().getWidth()),
-                // visibility: 'hidden',
+                visibility: 'hidden',
                 position: 'absolute',
                 left: '400px',
                 top: '0px',
@@ -210,37 +209,9 @@
             });
             ruler.inject(view);
             result = Math.ceil(ruler.getSize().y);
-            // ruler.dispose();
+            ruler.dispose();
 
             return result;
-
-            function replaceSpaces(aString) {
-                var regExps = [/^\s+/, /\s+$/],
-                    matchResult,
-                    substitution
-                    ;
-
-                aString = aString || '';
-                regExps.each(function(regExp) {
-                    matchResult = aString.match(regExp);
-                    if (matchResult) {
-                        length = matchResult[0].length;
-                        substitution = '';
-                        while (length--) {
-                            substitution += '&nbsp;'
-                        }
-                        aString = aString.replace(regExp, substitution);
-                    }
-                });
-                
-                return aString;
-            }
-
-            function handleString(aString) {
-                aString = aString.replace(/</g, '&lt;');
-                aString = aString.replace(/>/g, '&gt;');
-                return aString;
-            }
         },                 
         _calculateHeight: function() {
             var self = this,
@@ -255,7 +226,8 @@
                 ;
 
             pendingContent = self.getPendingContent();
-            pendingContentHeight = calculatePendingContentHeight(pendingContent);
+            pendingContentHeight = RC.isEmpty(pendingContent) ? self.tagHeight : 
+                                        self._calculateHeightOfAString(pendingContent);
 
             if (!self.hasTags()) {
                 result = pendingContentHeight;                
@@ -275,25 +247,6 @@
             result += self._getInitialNonContentDimension().getHeight();
 
             return result;
-
-            function calculatePendingContentHeight(pendingContent) {
-                var result,
-                    scrollDimension
-                    ;
-
-                if (RC.isEmpty(pendingContent)) {
-                    result = self.tagHeight;
-                } else {
-/*                    scrollDimension = Dimension.fromElementSize(self._getTextarea().getScrollSize());
-                    result = scrollDimension.getHeight() - Dimension.fromElementNonContent(self._getTextarea(), null, {
-                        top: 0,
-                        bottom: 0
-                    }).getHeight();*/
-                    result = self._calculateHeightOfAString(pendingContent);
-                }
-
-                return result;             
-            }
         },  
         _calculateCursorLocation: function() {
             var self = this,
@@ -439,17 +392,14 @@
                 event.preventDefault();
                 
                 var text = textarea.getProperty('value'),
-                    tag = new Tag(text, null),
-                    tagLocation,
-                    maxAvailableWidth = self._getMaxAvailableWidth()
+                    maxAvailableWidth = self._getMaxAvailableWidth(),
+                    tag = new Tag(text, text, self.tagHeight, maxAvailableWidth),
+                    tagLocation
                     ;
 
                 tag.compile(view);
                 tagLocation = self._calculateCursorLocation();
                 tag.setLocation(tagLocation);
-                if (tag.getDimension().getWidth() > maxAvailableWidth) {
-                    tag.setMaxWidth(maxAvailableWidth);
-                }
                 self.tags.add(tag);
 
                 textarea.setProperty('value', '');
@@ -527,10 +477,12 @@
     });
 
     var Tag = RC.extend(RC.Element, {
-        constructor: function(text, value) {
+        constructor: function(text, value, tagHeight, tagMaxWidth) {
             Tag.superclass.constructor.apply(this, [{}]);
             this.text = text;
             this.value = value;
+            this.tagHeight = tagHeight;
+            this.tagMaxWidth = tagMaxWidth;
 
             var config = {
                 backgroundColor: '#00FF00'
@@ -550,8 +502,11 @@
         render: function() {
             var self = this, 
                 view,
+                tableView,
+                tableRowView,
                 textView,
-                deleteIconView
+                deleteIconView,
+                deleteIconViewWidth = 20
                 ;
 
             view = new Element('div');
@@ -561,53 +516,37 @@
                 position: 'absolute',
                 left: '0px',
                 top: '0px',
-                height: '15px'/*,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',                */
-            });
-            
-/*            self.textView = textView = (new Element('span', {
-                html: self.text
-            })).inject(view);
-            textView.setStyles({
-                display: 'inline-block',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                maxWidth: '332px'
-            });   
-            textView.setStyles({
-                whiteSpace: 'nowrap'
-            });             
-
-            deleteIconView = (new Element('span', {
-                html: '&times;'
-            })).inject(view);
-            deleteIconView.setStyles({
-                display: 'inline-block',
-                width: '20px',
-                textAlign: 'center'
+                height: Util.pixels(self.tagHeight)
             });
 
-            Util.enableSmartTooltip(textView);*/
-
-            var tableView = (new Element('table', {
+            tableView = (new Element('table', {
                 cellSpacing: '0px',
                 cellPadding: '0px'
             })).inject(view);
-            var tableRowView = (new Element('tr')).inject(tableView);
-            textView = (new Element('td', {
-                html: self.text
-            })).inject(tableRowView);
+            tableView.setStyles({
+                height: '100%'
+            });
+
+            tableRowView = (new Element('tr')).inject(tableView);
+
+            textView = (new Element('div', {
+                html: Util.htmlEntities(self.text)
+            })).inject((new Element('td', {
+                style: RC.UI.Message('max-width: {0};', Util.pixels(self.tagMaxWidth - deleteIconViewWidth))
+            })).inject(tableRowView));
             textView.setStyles({
+                height: '100%',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap'
-            });            
+            });   
+            Util.enableSmartTooltip(textView);         
 
             deleteIconView = (new Element('td', {
                 html: '&times;'
             })).inject(tableRowView);
             deleteIconView.setStyles({
-                paddingLeft: '20px',
+                width: Util.pixels(deleteIconViewWidth),
                 textAlign: 'center'
             });            
 
@@ -665,22 +604,6 @@
             view = self.getRenderedCanvas();
 
             return Dimension.fromElement(view);
-        },
-        setMaxWidth: function(maxWidth) {
-            var self = this,
-                view,
-                viewDimension,
-                viewContentDimension,
-                fixedWidth
-                ;
-
-            self._requireView();
-
-            view = self.getRenderedCanvas();
-            viewDimension = self.getDimension();
-            viewContentDimension = Dimension.fromElementContent(view);
-            fixedWidth = viewDimension.getWidth() - viewContentDimension.getWidth();
-            view.setStyle('max-width', Util.pixels(maxWidth - fixedWidth));
         }
     });
 
@@ -815,7 +738,10 @@
                 pixels2 = parseFloat(pixels2);
 
                 return isNaN(pxiels1) ? (isNaN(pixels2) ? 0 : pixels2) : pxiels1;
-            }          
+            },
+            htmlEntities: function(str) {
+                return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }       
         },
         initialize: function() {
             throw 'Util can not be instantiated.';
