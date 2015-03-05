@@ -247,24 +247,7 @@
             }
 
             return result;
-        },
-        _relocateCursor: function() {
-            var self = this,
-                baseLocation,
-                cursorLocation,
-                difference,
-                textarea
-                ;
-
-            baseLocation = self._getBaseLocation();
-            cursorLocation = self._calculateNewTagLocation();
-            difference = cursorLocation.getDifference(baseLocation);
-            textarea = self._getTextarea();
-            textarea.setStyles({
-                paddingLeft: Util.pixels(difference.getWidth()),
-                paddingTop: Util.pixels(difference.getHeight())
-            });
-        },        
+        },   
         _getOverflowThreshold: function() {
             var self = this,
                 result = 0,
@@ -314,6 +297,40 @@
 
             return self._getInitialContentDimension().getWidth();        
         },
+        _relocateCursor: function() {
+            var self = this,
+                baseLocation,
+                cursorLocation,
+                difference,
+                textarea
+                ;
+
+            baseLocation = self._getBaseLocation();
+            cursorLocation = self._calculateNewTagLocation();
+            difference = cursorLocation.getDifference(baseLocation);
+            textarea = self._getTextarea();
+            textarea.setStyles({
+                paddingLeft: Util.pixels(difference.getWidth()),
+                paddingTop: Util.pixels(difference.getHeight())
+            });
+        },     
+        _relocateLastTagIfNecessary: function() {
+            var self = this
+                ;
+
+            if (self.hasTags()) {
+                lastTag = self.tags.last();
+                lastTagLocation = lastTag.getLocation();
+                lastTagEndX = lastTagLocation.offset(lastTag.getDimension().getWidth()).getX();
+
+                initialContentDimension = self._getInitialContentDimension();
+                xThreshold = self._getBaseLocation().offset(self.fixedPadding).offset(initialContentDimension.getWidth()).getX();
+                if (lastTagEndX > xThreshold) {
+                    newLocation = self._calculateNewTagLocation();
+                    lastTag.setLocation(newLocation);
+                }
+            }
+        },        
         render: function() {
             var self = this,
                 view,
@@ -419,6 +436,7 @@
 
             self._requireView();
 
+            self._relocateLastTagIfNecessary();
             self._relocateCursor();
 
             view = self.getRenderedCanvas();
@@ -525,8 +543,13 @@
         },
         setLocation: function(location) {
             var self = this,
-                view = self.getRenderedCanvas();
-            view && view.setStyles({
+                view
+                ;
+
+            self._requireView();
+
+            view = self.getRenderedCanvas();
+            view.setStyles({
                 left: location.getX(),
                 top: location.getY()
             });
