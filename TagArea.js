@@ -315,7 +315,13 @@
             });
         },     
         _relocateLastTagIfNecessary: function() {
-            var self = this
+            var self = this,
+                lastTag,
+                lastTagLocation,
+                lastTagEndX,
+                initialContentDimension,
+                xThreshold,
+                newLocation
                 ;
 
             if (self.hasTags()) {
