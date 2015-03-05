@@ -248,10 +248,9 @@
 
             return result;
         },   
-        _getOverflowThreshold: function() {
+        _getOverflowThreshold: function(referredTag) {
             var self = this,
                 result = 0,
-                lastTag,
                 location,
                 baseLocation,
                 difference,
@@ -259,11 +258,10 @@
                 maxAvailableWidth = self._getMaxAvailableWidth()
                 ;
 
-            if (!self.hasTags()) {
+            if (!self.hasTags() || !referredTag) {
                 result = maxAvailableWidth;
             } else {
-                lastTag = self.tags.last();
-                location = lastTag.getNextColumnTopAlignedSiblingLocation(self.tagSpacing);
+                location = referredTag.getNextColumnTopAlignedSiblingLocation(self.tagSpacing);
                 baseLocation = self._getBaseLocation();
                 difference = location.getDifference(baseLocation);
                 usedWidth = difference.getWidth() - self.fixedPadding;
@@ -336,21 +334,88 @@
                     lastTag.setLocation(newLocation);
                 }
             }
-        },        
+        },
+        _deleteTag: function(tag) {
+            var self = this,
+                baseLocation = self._getBaseLocation(),
+                // Direct Predecessor of the tag
+                dp,
+                // Direct Follower of the tag 
+                df,
+                tagView,
+                rightPendingTagLocation,
+                overflowThreshold,
+                downwardPendingTagLocation,
+                dfLocation
+                ;
+
+            dp = getDp(tag);
+            df = getDf(tag);
+
+            tagView = tag.getRenderedCanvas();
+            tagView.dispose();
+
+            self.tags.remove(tag);
+
+            while (df) {
+                rightPendingTagLocation = dp ? dp.getNextColumnTopAlignedSiblingLocation(self.tagSpacing)
+                                             : baseLocation.offset(self.fixedPadding, self.fixedPadding);
+                if (rightPendingTagLocation.isTopAligned(df.getLocation())) {
+                    dfLocation = rightPendingTagLocation;
+                } else {
+                    overflowThreshold = self._getOverflowThreshold(dp);
+                    if (overflowThreshold >= df.getDimension().getWidth()) {
+                        dfLocation = rightPendingTagLocation;
+                    } else {
+                        downwardPendingTagLocation = baseLocation.offset(self.fixedPadding).setY(dp.getNextRowLeftAlignedSiblingLocation(self.tagSpacing).getY());
+                        dfLocation = downwardPendingTagLocation;
+                    }
+                }
+                df.setLocation(dfLocation);
+                dp = df;
+                df = getDf(df);
+            }
+            
+            self.refresh();
+
+            self.focus();
+
+            function getDp(tag) {
+                var tagIndex
+                    ;
+
+                tagIndex = self.tags.indexOf(tag);
+
+                return (tagIndex == -1 || tagIndex == 0) ? null 
+                                                         : self.tags.itemAt(tagIndex - 1);             
+            }
+
+            function getDf(tag) {
+                var tagIndex
+                    ;
+
+                tagIndex = self.tags.indexOf(tag);
+
+                return (tagIndex == -1 || tagIndex == (self.tags.length - 1)) ? null 
+                                                                              : self.tags.itemAt(tagIndex + 1);             
+            }
+        },
         render: function() {
             var self = this,
                 view,
                 textarea;
 
             view = new Element('div', {
-                id: self.getId() + '-view'
+                id: self.getId() + '-field'
             });
             view.setStyles({
                 position: 'relative',
                 height: Util.pixels(self.minHeight)
             });
 
-            textarea = new Element('textarea');
+            textarea = new Element('textarea', {
+                name: self.name
+            });
             textarea.tagArea = self;
             textarea.setStyles({
                 fontFamily: 'monospace',
@@ -376,6 +441,9 @@
                 tagLocation = self._calculateNewTagLocation();
                 tag.setLocation(tagLocation);
                 self.tags.add(tag);
+                tag.onDelete(function(tag) {
+                    self._deleteTag(tag);
+                });
 
                 textarea.setProperty('value', '');
 
@@ -391,7 +459,13 @@
             });
 
             return view;
-        },        
+        },  
+        getInputElementSearchString: function() {
+            var self = this
+                ;
+
+            return 'textarea[name=' + self.name + ']';
+        },   
         getId: function() {
             return this.id;
         },
@@ -420,12 +494,14 @@
         },
         hasOverflowedPendingContent: function() {
             var self = this,
+                lastTag,
                 overflowThreshold,          
                 pendingContent,
                 pendingContentWidth
                 ;
 
-            overflowThreshold = self._getOverflowThreshold();
+            lastTag = self.tags.last();
+            overflowThreshold = self._getOverflowThreshold(lastTag);
             if (overflowThreshold == 0) {
                 return true;
             }
@@ -525,8 +601,12 @@
                 fontFamily: 'monospace',
                 fontSize: '14px',                    
                 width: Util.pixels(deleteIconViewWidth),
-                textAlign: 'center'
-            });            
+                textAlign: 'center',
+                cursor: 'pointer'
+            }); 
+            deleteIconView.addEvent('click', function() {
+                self.fireListener('delete', self);
+            });         
 
             return view;
         },
@@ -587,6 +667,15 @@
             view = self.getRenderedCanvas();
 
             return Dimension.fromElement(view);
+        },
+        onDelete: function(fn, scope) {
+            var self = this
+                ;
+
+            self.addListener('delete', fn, scope);
+        },
+        getValue: function() {
+            return this.value;
         }
     });
 
@@ -619,6 +708,18 @@
             var self = this
                 ;
             return new Dimension(self.getX() - location.getX(), self.getY() - location.getY());
+        },
+        isTopAligned: function(location) {
+            var self = this
+                ;
+
+            return self.getY() == location.getY();
+        },
+        isLeftAligned: function(location) {
+            var self = this
+                ;
+
+            return self.getX() == location.getX();
         }
     });
 
