@@ -226,7 +226,7 @@
 
             return result;
         },  
-        _calculateCursorLocation: function() {
+        _calculateNewTagLocation: function() {
             var self = this,
                 result,
                 baseLocation = self._getBaseLocation(),
@@ -248,16 +248,18 @@
 
             return result;
         },
-        _updateCursorLocation: function(cursorLocation) {
+        _relocateCursor: function() {
             var self = this,
-                textarea,
                 baseLocation,
-                difference
+                cursorLocation,
+                difference,
+                textarea
                 ;
 
-            textarea = self._getTextarea();
             baseLocation = self._getBaseLocation();
+            cursorLocation = self._calculateNewTagLocation();
             difference = cursorLocation.getDifference(baseLocation);
+            textarea = self._getTextarea();
             textarea.setStyles({
                 paddingLeft: Util.pixels(difference.getWidth()),
                 paddingTop: Util.pixels(difference.getHeight())
@@ -348,7 +350,7 @@
                     ;
 
                 tag.compile(view);
-                tagLocation = self._calculateCursorLocation();
+                tagLocation = self._calculateNewTagLocation();
                 tag.setLocation(tagLocation);
                 self.tags.add(tag);
 
@@ -412,14 +414,12 @@
         },
         refresh: function() {
             var self = this,
-                view,
-                cursorLocation
+                view
                 ;
 
             self._requireView();
 
-            cursorLocation = self._calculateCursorLocation();
-            self._updateCursorLocation(cursorLocation);
+            self._relocateCursor();
 
             view = self.getRenderedCanvas();
             view.setStyle('height', self._calculateHeight());
