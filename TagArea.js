@@ -522,6 +522,8 @@
                 html: '&times;'
             })).inject(tableRowView);
             deleteIconView.setStyles({
+                fontFamily: 'monospace',
+                fontSize: '14px',                    
                 width: Util.pixels(deleteIconViewWidth),
                 textAlign: 'center'
             });            
