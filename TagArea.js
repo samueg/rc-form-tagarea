@@ -144,44 +144,22 @@
 
             view = self.getRenderedCanvas();
             ruler = new Element('span', {
-                html: replaceSpaces(aString),
+                html: Util.htmlEntities(aString),
             });
             ruler.setStyles({
                 fontFamily: 'monospace',
                 fontSize: '14px',                    
                 visibility: 'hidden',
                 position: 'absolute',
-                left: '0px',
+                left: '400px',
                 top: '0px',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'pre'
             });
             ruler.inject(view);
             result = Math.ceil(ruler.getSize().x);
             ruler.dispose();
 
             return result;
-
-            function replaceSpaces(aString) {
-                var regExps = [/^\s+/, /\s+$/],
-                    matchResult,
-                    substitution
-                    ;
-
-                aString = aString || '';
-                regExps.each(function(regExp) {
-                    matchResult = aString.match(regExp);
-                    if (matchResult) {
-                        length = matchResult[0].length;
-                        substitution = '';
-                        while (length--) {
-                            substitution += '&nbsp;'
-                        }
-                        aString = aString.replace(regExp, substitution);
-                    }
-                });
-                
-                return aString;
-            }
         },
         _calculateHeightOfAString: function(aString) {
             var self = this,
@@ -203,7 +181,7 @@
                 visibility: 'hidden',
                 position: 'absolute',
                 left: '400px',
-                top: '0px',
+                top: '100px',
                 whiteSpace: 'pre-wrap',
                 wordWrap: 'break-word'
             });
@@ -333,34 +311,6 @@
                 ;
 
             return self._getInitialContentDimension().getWidth();        
-        },
-        _calculateNewTagLocation: function(newTag) {
-            var self = this,
-                result = self._getBaseLocation(),
-                textarea,
-                leftPadding,
-                topPadding,
-                tagWidth,
-                overflowThreshold,
-                lastTag
-                ;
-
-            overflowThreshold = self._getOverflowThreshold();
-            tagWidth = newTag.getDimension().getWidth();
-            console.log('overflowThreshold/newTagWidth: ' + overflowThreshold + '/' + tagWidth);
-            if (!self.hasTags() || tagWidth > overflowThreshold) {
-                textarea = self._getTextarea();
-                if (textarea) {
-                    leftPadding = parseFloat(textarea.getStyle('padding-left'));
-                    topPadding = parseFloat(textarea.getStyle('padding-top'));
-                    result = result.offset(leftPadding, topPadding);
-                }
-            } else {
-                lastTag = self.tags.last();
-                result = lastTag.getNextColumnTopAlignedSiblingLocation(self.tagSpacing);
-            } 
-
-            return result;
         },
         render: function() {
             var self = this,
@@ -535,10 +485,12 @@
                 style: RC.UI.Message('max-width: {0};', Util.pixels(self.tagMaxWidth - deleteIconViewWidth))
             })).inject(tableRowView));
             textView.setStyles({
+                fontFamily: 'monospace',
+                fontSize: '14px',                
                 height: '100%',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'pre'
             });   
             Util.enableSmartTooltip(textView);         
 
