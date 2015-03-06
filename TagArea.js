@@ -196,6 +196,13 @@
 
             return textarea.getProperty('value');
         },
+        _clearPendingContent: function() {
+            var self = this,
+                textarea = self._getTextarea()
+                ;
+
+            textarea.setProperty('value', '');
+        },
         _hasTags: function() {
             var self = this
                 ;
@@ -466,25 +473,14 @@
             });
             textarea.inject(view);
             textarea.addEvent('newTagIsGoingToBeCreated', function(event) {
-                var text,
-                    tag,
-                    tagLocation;
+                var text
+                    ;
 
                 event.preventDefault();
                 
                 text = self._getPendingContent();
-                tag = new Tag(text, text, self._getTagViewConfig());
-                tag.compile(view);
-                tagLocation = self._calculateNewTagLocation();
-                tag.setLocation(tagLocation);
-                tag.onDelete(function(tag) {
-                    self._deleteTag(tag);
-                });
-                self.tags.add(tag);
-
-                textarea.setProperty('value', '');
-
-                self._refresh();
+                self._clearPendingContent();
+                self.createTag(text, text);
             });
 
             textarea.addEvent('pendingContentOverflow', function(event) {
@@ -518,6 +514,34 @@
             view = self.getRenderedCanvas();
 
             return Dimension.fromElement(view);
+        },
+        createTag: function(text, value) {
+            var self = this,
+                tag,
+                view,
+                pendingContent
+                ;
+
+            tag = new Tag(text, value, self._getTagViewConfig());
+            self.tags.add(tag);
+
+            view = self.getRenderedCanvas();
+            if (view) {   
+                pendingContent = self._getPendingContent();
+                if (!RC.isEmpty(pendingContent)) {
+                    self._clearPendingContent();
+                    self.createTag(pendingContent, pendingContent, self._getTagViewConfig());
+                }
+                
+                tag.compile(view);
+                tagLocation = self._calculateNewTagLocation();
+                tag.setLocation(tagLocation);
+                tag.onDelete(function(tag) {
+                    self._deleteTag(tag);
+                });
+
+                self._refresh();
+            }
         }
     });
 
