@@ -31,7 +31,6 @@
         condition: function(event) {
             var tagArea = event.target.tagArea
                 ;
-            console.log('key: ' + event.key);
 
             return  ('backspace' == event.key) && RC.isEmpty(tagArea._getPendingContent());
         }
@@ -73,7 +72,7 @@
                 fontSize: 16,
                 tagFontSize: 12,                
                 width: 600,
-                height: 43,
+                height: 47,
                 padding: 10,
                 borderWidth: 1,
                 tagHeight: 21,
@@ -304,7 +303,7 @@
 
             pendingContent = self._getPendingContent();
             pendingContentWidth = self._calculateWidthOfAString(pendingContent);
-            console.log('overflowThreshold/pendingContentWidth: ' + overflowThreshold + '/' + pendingContentWidth);
+            
             return pendingContentWidth > overflowThreshold;
         },
         _calculateHeight: function() {
@@ -320,7 +319,7 @@
                 ;
 
             pendingContent = self._getPendingContent();
-            pendingContentHeight = RC.isEmpty(pendingContent) ? self.viewConfig.tagHeight : 
+            pendingContentHeight = RC.isEmpty(pendingContent) ? (self.viewConfig.tagHeight + self.viewConfig.tagPadding * 2): 
                                         self._calculateHeightOfAString(pendingContent);
             firstRenderedTag = self._getFirstRenderedTag();
             lastRenderedTag = self._getLastRenderedTag();                                        
