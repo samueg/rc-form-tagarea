@@ -18,15 +18,39 @@
   		// html: 'Hello World!'.substring(0, 4),
       items: [{
         xtype: 'form',
+        id: 'form',
         items: [{
           xtype: 'tagarea',
-          name: 'faxReceivers',
+          name: 'tagArea',
           viewConfig: {
               width: 374
           },
           tags: [{
-            text: 'Hello TagArea!',
+            text: 'My suggestion is to add it to the page with a left margin of -10000 or something',
             value: 'HELLO_TAGAREA'
+          }, {
+            text: 'Hello, TagArea',
+            value: 'Cool'
+          }],
+          blurAction: 3
+        }, {
+          xtype: 'fieldgroup',
+          items: [{
+            xtype: 'textfield',
+            name: 'tagText',
+            width: 200
+          }, {
+            xtype: 'button',
+            text: 'Create Tag',
+            handler: function() {
+               var self = this,
+                   form = RC.ComponentMgr.get('form'),
+                   tagArea = form.getItem('tagArea'),
+                   tagText = form.getItem('tagText').getValue()
+                   ;
+
+                tagArea.createTag(tagText, tagText, true);
+            }
           }]
         }]
       }]

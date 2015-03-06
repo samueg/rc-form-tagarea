@@ -26,6 +26,17 @@
         }
     };
 
+    Element.Events.backspacePressedToDeleteTag = {
+        base: 'keydown',
+        condition: function(event) {
+            var tagArea = event.target.tagArea
+                ;
+            console.log('key: ' + event.key);
+
+            return  ('backspace' == event.key) && RC.isEmpty(tagArea._getPendingContent());
+        }
+    };
+
     Class.Mutators.GetterSetter = function(properties) { 
         var klass = this; 
         Array.from(properties).each(function(property) {
@@ -57,13 +68,16 @@
             config = config || {};
             viewConfig = config.viewConfig || {};
             RC.applyIf(viewConfig, {
-                fontFamily: 'monospace',
-                fontSize: 14,                
+                // fontFamily: 'monospace',
+                fontFamily: 'Arial, Helvetica, sans-serif',
+                fontSize: 16,
+                tagFontSize: 12,                
                 width: 600,
-                height: 39,
+                height: 43,
                 padding: 10,
                 borderWidth: 1,
-                tagHeight: 17,
+                tagHeight: 21,
+                tagPadding: 2,
                 tagSpacing: 5
             });
             RC.apply(config, {
@@ -85,6 +99,7 @@
                 delete self.initialTags;
             }
 
+            self.setBlurAction(self.blurAction);
         },        
         _getBaseLocation: function() {
             var self = this
@@ -126,9 +141,11 @@
 
             return {
                 fontFamily: self.viewConfig.fontFamily,
-                fontSize: self.viewConfig.fontSize,
-                backgroundColor: '#00FF00',
+                fontSize: self.viewConfig.tagFontSize,
+                backgroundColor: '#04415D',
+                color: '#FFFFFF',
                 height: self.viewConfig.tagHeight,
+                padding: self.viewConfig.tagPadding,
                 maxWidth: self._getMaxAvailableWidth()
             };
         },                        
@@ -152,7 +169,7 @@
             });
             ruler.inject($(document.body));
             result = Math.ceil(ruler.getSize().x);
-            ruler.dispose();
+            ruler.destroy();
 
             return result;
         },
@@ -174,11 +191,12 @@
                 left: '0px',
                 top: '0px',
                 whiteSpace: 'pre-wrap',
-                wordWrap: 'break-word'
+                wordWrap: 'break-word',
+                lineHeight: Util.pixels(self.viewConfig.tagHeight + self.viewConfig.tagPadding * 2)
             });
             ruler.inject($(document.body));
             result = Math.ceil(ruler.getSize().y);
-            ruler.dispose();
+            ruler.destroy();
 
             return result;
         }, 
@@ -430,7 +448,7 @@
             df = getDf(tag);
 
             tagView = tag.getRenderedCanvas();
-            tagView.dispose();
+            tagView.destroy();
 
             self.tags.remove(tag);
 
@@ -523,7 +541,8 @@
                 boxSizing: 'border-box',
                 width: '100%',
                 height: '100%',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                lineHeight: Util.pixels(self.viewConfig.tagHeight + self.viewConfig.tagPadding * 2)
             });
             textarea.inject(view);
             textarea.addEvent('newTagIsGoingToBeCreated', function(event) {
@@ -543,6 +562,30 @@
 
             textarea.addEvent('pendingContentNormal', function(event) {
                 self._refresh();
+            });
+
+            textarea.addEvent('blur', function(event) {
+                var blurAction = self.getBlurAction(),
+                    text
+                    ;
+
+                switch (blurAction) {
+                    case RC.form.TagArea.BlurActions.CLEAR:
+                        self._clearPendingContent();
+                        break;
+                    case RC.form.TagArea.BlurActions.CREATE:
+                        text = self._getPendingContent();
+                        self._clearPendingContent();
+                        self.createTag(text, text);
+                        break;
+                    case RC.form.TagArea.BlurActions.LEAVE_ALONE:
+                        break;
+                }
+            });
+
+            textarea.addEvent('backspacePressedToDeleteTag', function(event) {
+                var lastRenderedTag = self._getLastRenderedTag();
+                lastRenderedTag && self._deleteTag(lastRenderedTag);
             });
 
             if (self.tags.length != 0) {
@@ -567,20 +610,27 @@
         },
         getDimension: function() {
             var self = this,
-                view
+                view = self._requireView()
                 ;
-
-            self._requireView();
-            view = self.getRenderedCanvas();
 
             return Dimension.fromElement(view);
         },
-        createTag: function(text, value) {
+        createTag: function(text, value, keep) {
             var self = this,
                 tag,
-                view,
+                view = self.getRenderedCanvas(),
                 pendingContent
                 ;
+
+            if (view) {
+                pendingContent = self._getPendingContent();
+                if (!RC.isEmpty(pendingContent)) {
+                    self._clearPendingContent();
+                    if (RC.isTrue(keep)) {
+                        self.createTag(pendingContent, pendingContent, self._getTagViewConfig());
+                    }
+                }                
+            }
 
             tag = new Tag(text, value, self._getTagViewConfig());
             tag.onDelete(function(tag) {
@@ -588,18 +638,35 @@
             });            
             self.tags.add(tag);
 
-            view = self.getRenderedCanvas();
             if (view) {   
-                pendingContent = self._getPendingContent();
-                if (!RC.isEmpty(pendingContent)) {
-                    self._clearPendingContent();
-                    self.createTag(pendingContent, pendingContent, self._getTagViewConfig());
-                }
-                
                 self._renderWithTag(view, tag);
             }
+        },
+        getBlurAction: function() {
+            var self = this
+                ;
+
+            return self.blurAction;
+        },
+        setBlurAction: function(blurAction) {
+            var self = this
+                ;
+
+            if (Object.contains(RC.form.TagArea.BlurActions, blurAction)) {
+                self.blurAction = blurAction;
+            } else {
+                self.blurAction = RC.form.TagArea.BlurActions.CLEAR;
+            }
+
+            return self;
         }
     });
+
+    RC.form.TagArea.BlurActions = {
+        CLEAR: 1,
+        CREATE: 2,
+        LEAVE_ALONE: 3
+    };
 
     var Tag = RC.extend(RC.Element, {
         constructor: function(text, value, viewConfig) {
@@ -630,16 +697,17 @@
                 tableRowView,
                 textView,
                 deleteIconView,
-                deleteIconViewWidth = 20
+                deleteIconViewWidth = 12
                 ;
 
             self.getRenderedCanvas = function() {
                 return view;
             };
 
-            view = new Element('div');
+            view = new Element('div', {
+                id: self.getId() + '-view'
+            });
             view.setStyles({
-                backgroundColor: self.viewConfig.backgroundColor,
                 display: 'block',
                 position: 'absolute',
                 left: Util.pixels(self.location.getX()),
@@ -661,10 +729,16 @@
             textView.setStyles({
                 fontFamily: self.viewConfig.fontFamily,
                 fontSize: Util.pixels(self.viewConfig.fontSize),
+                backgroundColor: self.viewConfig.backgroundColor,
+                color: self.viewConfig.color,
                 height: Util.pixels(self.viewConfig.height),
+                lineHeight: Util.pixels(self.viewConfig.height),
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
-                whiteSpace: 'pre'
+                whiteSpace: 'pre',
+                border: '1px',
+                borderRadius: '4px',
+                padding: Util.pixels(self.viewConfig.padding)
             });   
             Util.enableSmartTooltip(textView);
 
@@ -673,10 +747,12 @@
             })).inject(tableRowView);
             deleteIconView.setStyles({
                 fontFamily: self.viewConfig.fontFamily,
-                fontSize: Util.pixels(self.viewConfig.fontSize),                    
+                fontSize: Util.pixels(self.viewConfig.fontSize),
+                // color: self.viewConfig.color,                    
                 width: Util.pixels(deleteIconViewWidth),
                 textAlign: 'center',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                verticalAlign: 'middle'
             }); 
             deleteIconView.addEvent('click', function() {
                 self.fireListener('delete', self);
@@ -695,25 +771,21 @@
         },
         setLocation: function(location) {
             var self = this,
-                view
+                view = self._requireView()
                 ;
 
             self.location = location;
-            view = self.getRenderedCanvas();
-            view && view.setStyles({
+            view.setStyles({
                 left: location.getX(),
                 top: location.getY()
             });
         },      
         getDimension: function() {
             var self = this,
-                view
+                view = self._requireView()
                 ;
 
-            view = self.getRenderedCanvas();
-
-            return view ? Dimension.fromElement(view) 
-                        : new Dimension();
+            return Dimension.fromElement(view);
         },
         getNextRowLeftAlignedSiblingLocation: function(spacing) {
             var self = this
@@ -790,15 +862,24 @@
         GetterSetter: ['width', 'height'],
         Static: {
             fromElement: function(element) {
-                size = Util.getElementSize(element);
-                console.log('x = ' + size.x + ', y = ' + size.y);
-                return Dimension.fromElementSize(size);
-            },
-            fromElementSize: function(size) {
+                var size = element.getSize(),
+                    copy
+                    ;
+
+                if (size.x == 0 && size.y == 0) {
+                    copy = element.clone();
+                    copy.setStyles({
+                        visibility: 'hidden'
+                    });
+                    copy.inject($(document.body));
+                    size = copy.getSize();
+                    copy.destroy();
+                }
+
                 return new Dimension(size.x, size.y);
             },
             fromElementContent: function(element, paddings, borderWidths) {
-                var size,
+                var dimension,
                     leftBorderWidth,
                     leftPadding,
                     rightBorderWidth,
@@ -814,7 +895,7 @@
                 paddings = paddings || {};
                 borderWidths = borderWidths || {};
 
-                size = Uitl.getElementSize(element);
+                dimension = Dimension.fromElement(element);
                 leftBorderWidth = Util.choosePixels(borderWidths.left, element.getStyle('border-left-width'));
                 leftPadding = Util.choosePixels(paddings.left, element.getStyle('padding-left'));
                 rightBorderWidth = Util.choosePixels(borderWidths.right, element.getStyle('border-right-width'));
@@ -824,8 +905,8 @@
                 bottomBorderWidth = Util.choosePixels(borderWidths.bottom, element.getStyle('border-bottom-width'));
                 bottomPadding = Util.choosePixels(paddings.bottom, element.getStyle('padding-bottom'));
                         
-                width = size.x - leftBorderWidth - leftPadding - rightBorderWidth - rightPadding;
-                height = size.y - topBorderWidth - topPadding - bottomBorderWidth - bottomPadding;
+                width = dimension.getWidth() - leftBorderWidth - leftPadding - rightBorderWidth - rightPadding;
+                height = dimension.getHeight() - topBorderWidth - topPadding - bottomBorderWidth - bottomPadding;
 
                 return new Dimension(width, height);
             },
@@ -889,29 +970,7 @@
             },
             htmlEntities: function(str) {
                 return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-            },
-            getElementSize: function(element) {
-/*                return element.measure(function(){
-                    return this.getSize();
-                });*/ 
-/*                var dimensions = element.getDimensions({computeSize: true});
-                return {x: dimensions.x , y: dimensions.y}; */       
-
-            },
-            isDOMElement: function(element) {
-                var body = $(document.body),
-                    parent
-                    ;
-
-                while ((parent = element.getParent()) != null) {
-                    if (parent.tag == 'body') {
-                        return true;
-                    }
-                    element = parent;
-                }
-
-                return false;
-            }       
+            } 
         },
         initialize: function() {
             throw 'Util can not be instantiated.';
