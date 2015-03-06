@@ -70,9 +70,21 @@
                 viewConfig: viewConfig
             });
 
+            if (RC.isArray(config.tags)) {
+                config.initialTags = config.tags;
+            }
+
             RC.form.TagArea.superclass.constructor.apply(this, [config]);
 
             self.tags = new RC.MixedCollection();
+
+            if (RC.isArray(self.initialTags)) {
+                self.initialTags.each(function(initialTag) {
+                    self.createTag(initialTag.text, initialTag.value);
+                });
+                delete self.initialTags;
+            }
+
         },        
         _getBaseLocation: function() {
             var self = this
@@ -169,19 +181,18 @@
             ruler.dispose();
 
             return result;
-        },  
+        }, 
         _requireView: function() {
             var self = this,
-                view
+                view = self.getRenderedCanvas()
                 ;
 
-            view = self.getRenderedCanvas();
             if (!view) {
                 throw 'TagArea is not rendered.'
             }
 
             return view;
-        },
+        },        
         _getTextarea: function() {
             var self = this,
                 view = self._requireView()
@@ -203,11 +214,39 @@
 
             textarea.setProperty('value', '');
         },
-        _hasTags: function() {
-            var self = this
+        _getFirstRenderedTag: function() {
+            var self = this,
+                index,
+                tag
                 ;
 
-            return self.tags.length > 0;
+            index = 0;
+            while (index <= (self.tags.length - 1)) {
+                tag = self.tags.itemAt(index);
+                if (tag.getRenderedCanvas()) {
+                    return tag;
+                }
+                index++;
+            }
+
+            return null;
+        },        
+        _getLastRenderedTag: function() {
+            var self = this,
+                index,
+                tag
+                ;
+
+            index = self.tags.length - 1;
+            while (index >= 0) {
+                tag = self.tags.itemAt(index);
+                if (tag.getRenderedCanvas()) {
+                    return tag;
+                }
+                index--;
+            }
+
+            return null;
         },
         _getOverflowThreshold: function(referredTag) {
             var self = this,
@@ -219,7 +258,7 @@
                 maxAvailableWidth = self._getMaxAvailableWidth()
                 ;
 
-            if (!self._hasTags() || !referredTag) {
+            if (!referredTag) {
                 result = maxAvailableWidth;
             } else {
                 location = referredTag.getNextColumnTopAlignedSiblingLocation(self.viewConfig.tagSpacing);
@@ -233,14 +272,14 @@
         },
         _hasOverflowedPendingContent: function() {
             var self = this,
-                lastTag,
+                lastRenderedTag,
                 overflowThreshold,          
                 pendingContent,
                 pendingContentWidth
                 ;
 
-            lastTag = self.tags.last();
-            overflowThreshold = self._getOverflowThreshold(lastTag);
+            lastRenderedTag = self._getLastRenderedTag();
+            overflowThreshold = self._getOverflowThreshold(lastRenderedTag);
             if (overflowThreshold == 0) {
                 return true;
             }
@@ -255,9 +294,9 @@
                 result = 0,
                 pendingContent,
                 pendingContentHeight,                
-                firstTag,
+                firstRenderedTag,
                 startLocation,
-                lastTag,
+                lastRenderedTag,
                 endLocation,
                 tagsHeight
                 ;
@@ -265,14 +304,14 @@
             pendingContent = self._getPendingContent();
             pendingContentHeight = RC.isEmpty(pendingContent) ? self.viewConfig.tagHeight : 
                                         self._calculateHeightOfAString(pendingContent);
+            firstRenderedTag = self._getFirstRenderedTag();
+            lastRenderedTag = self._getLastRenderedTag();                                        
 
-            if (!self._hasTags()) {
+            if (!firstRenderedTag) {
                 result = pendingContentHeight;                
             } else {
-                firstTag = self.tags.first();
-                startLocation = firstTag.getLocation();
-                lastTag = self.tags.last();
-                endLocation = lastTag.getNextRowLeftAlignedSiblingLocation();
+                startLocation = firstRenderedTag.getLocation();
+                endLocation = lastRenderedTag.getNextRowLeftAlignedSiblingLocation();
                 tagsHeight = endLocation.getDifference(startLocation).getHeight();
                 result = tagsHeight;
 
@@ -289,19 +328,18 @@
             var self = this,
                 result,
                 baseLocation = self._getBaseLocation(),
-                lastTag,
+                lastRenderedTag = self._getLastRenderedTag(),
                 pendingContentOverflowed
                 ;
 
-            if (!self._hasTags()) {
+            if (!lastRenderedTag) {
                 result = baseLocation.offset(self.viewConfig.padding, self.viewConfig.padding);
             } else {
-                lastTag = self.tags.last();
                 pendingContentOverflowed = self._hasOverflowedPendingContent();
                 if (pendingContentOverflowed) {
-                    result = baseLocation.offset(self.viewConfig.padding, 0).setY(lastTag.getNextRowLeftAlignedSiblingLocation(self.viewConfig.tagSpacing).getY());
+                    result = baseLocation.offset(self.viewConfig.padding, 0).setY(lastRenderedTag.getNextRowLeftAlignedSiblingLocation(self.viewConfig.tagSpacing).getY());
                 } else {                        
-                    result = lastTag.getNextColumnTopAlignedSiblingLocation(self.viewConfig.tagSpacing);
+                    result = lastRenderedTag.getNextColumnTopAlignedSiblingLocation(self.viewConfig.tagSpacing);
                 }
             }
 
@@ -326,6 +364,28 @@
 
             return Dimension.fromElementContent(textarea).getWidth();
         },
+        _relocateLastRenderedTagIfNecessary: function() {
+            var self = this,
+                lastRenderedTag = self._getLastRenderedTag(),
+                lastRenderedTagLocation,
+                lastRenderedTagEndX,
+                initialContentDimension,
+                xThreshold,
+                newLocation
+                ;
+
+            if (lastRenderedTag) {
+                lastRenderedTagLocation = lastRenderedTag.getLocation();
+                lastRenderedTagEndX = lastRenderedTagLocation.offset(lastRenderedTag.getDimension().getWidth()).getX();
+
+                initialContentDimension = self._getInitialContentDimension();
+                xThreshold = self._getBaseLocation().offset(self.viewConfig.padding).offset(initialContentDimension.getWidth()).getX();
+                if (lastRenderedTagEndX > xThreshold) {
+                    newLocation = self._calculateNewTagLocation();
+                    lastRenderedTag.setLocation(newLocation);
+                }
+            }
+        },
         _relocateCursor: function() {
             var self = this,
                 baseLocation = self._getBaseLocation(),
@@ -340,36 +400,13 @@
                 paddingLeft: Util.pixels(difference.getWidth()),
                 paddingTop: Util.pixels(difference.getHeight())
             });
-        },
-        _relocateLastTagIfNecessary: function() {
-            var self = this,
-                lastTag,
-                lastTagLocation,
-                lastTagEndX,
-                initialContentDimension,
-                xThreshold,
-                newLocation
-                ;
-
-            if (self._hasTags()) {
-                lastTag = self.tags.last();
-                lastTagLocation = lastTag.getLocation();
-                lastTagEndX = lastTagLocation.offset(lastTag.getDimension().getWidth()).getX();
-
-                initialContentDimension = self._getInitialContentDimension();
-                xThreshold = self._getBaseLocation().offset(self.viewConfig.padding).offset(initialContentDimension.getWidth()).getX();
-                if (lastTagEndX > xThreshold) {
-                    newLocation = self._calculateNewTagLocation();
-                    lastTag.setLocation(newLocation);
-                }
-            }
-        },
+        },        
         _refresh: function() {
             var self = this,
                 view = self._requireView()
                 ;
 
-            self._relocateLastTagIfNecessary();
+            self._relocateLastRenderedTagIfNecessary();
             self._relocateCursor();
 
             view = self.getRenderedCanvas();
@@ -440,6 +477,19 @@
                                                                               : self.tags.itemAt(tagIndex + 1);             
             }
         },
+        _renderWithTag: function(view, tag) {
+            var self = this,
+                tagLocation = self._calculateNewTagLocation();
+                ;
+
+            if (tag.getRenderedCanvas()) {
+                return;
+            }
+
+            tag.compile(view);
+            tag.setLocation(tagLocation);
+            self._refresh();
+        },
         /**
          * @override
          */
@@ -447,6 +497,10 @@
             var self = this,
                 view,
                 textarea;
+
+            self.getRenderedCanvas = function() {
+                return view;
+            };
 
             view = new Element('div', {
                 id: self.getId() + '-field'
@@ -491,6 +545,12 @@
                 self._refresh();
             });
 
+            if (self.tags.length != 0) {
+                self.tags.each(function(tag) {
+                    self._renderWithTag(view, tag);
+                });
+            }
+
             return view;
         },
         /**
@@ -523,6 +583,9 @@
                 ;
 
             tag = new Tag(text, value, self._getTagViewConfig());
+            tag.onDelete(function(tag) {
+                self._deleteTag(tag);
+            });            
             self.tags.add(tag);
 
             view = self.getRenderedCanvas();
@@ -533,14 +596,7 @@
                     self.createTag(pendingContent, pendingContent, self._getTagViewConfig());
                 }
                 
-                tag.compile(view);
-                tagLocation = self._calculateNewTagLocation();
-                tag.setLocation(tagLocation);
-                tag.onDelete(function(tag) {
-                    self._deleteTag(tag);
-                });
-
-                self._refresh();
+                self._renderWithTag(view, tag);
             }
         }
     });
@@ -555,13 +611,14 @@
         },
         _requireView: function() {
             var self = this,
-                view
+                view = self.getRenderedCanvas()
                 ;
 
-            view = self.getRenderedCanvas();
             if (!view) {
                 throw 'Tag is not rendered.'
             }
+
+            return view;
         },
         /**
          * @override
@@ -575,6 +632,10 @@
                 deleteIconView,
                 deleteIconViewWidth = 20
                 ;
+
+            self.getRenderedCanvas = function() {
+                return view;
+            };
 
             view = new Element('div');
             view.setStyles({
@@ -729,7 +790,8 @@
         GetterSetter: ['width', 'height'],
         Static: {
             fromElement: function(element) {
-                size = element.getSize();
+                size = Util.getElementSize(element);
+                console.log('x = ' + size.x + ', y = ' + size.y);
                 return Dimension.fromElementSize(size);
             },
             fromElementSize: function(size) {
@@ -752,7 +814,7 @@
                 paddings = paddings || {};
                 borderWidths = borderWidths || {};
 
-                size = element.getSize();
+                size = Uitl.getElementSize(element);
                 leftBorderWidth = Util.choosePixels(borderWidths.left, element.getStyle('border-left-width'));
                 leftPadding = Util.choosePixels(paddings.left, element.getStyle('padding-left'));
                 rightBorderWidth = Util.choosePixels(borderWidths.right, element.getStyle('border-right-width'));
@@ -827,6 +889,28 @@
             },
             htmlEntities: function(str) {
                 return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            },
+            getElementSize: function(element) {
+/*                return element.measure(function(){
+                    return this.getSize();
+                });*/ 
+/*                var dimensions = element.getDimensions({computeSize: true});
+                return {x: dimensions.x , y: dimensions.y}; */       
+
+            },
+            isDOMElement: function(element) {
+                var body = $(document.body),
+                    parent
+                    ;
+
+                while ((parent = element.getParent()) != null) {
+                    if (parent.tag == 'body') {
+                        return true;
+                    }
+                    element = parent;
+                }
+
+                return false;
             }       
         },
         initialize: function() {
