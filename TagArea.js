@@ -523,7 +523,7 @@
 
             view = self.getRenderedCanvas();
             view.setStyle('height', self._calculateHeight());
-        }                             
+        }
     });
 
     var Tag = RC.extend(RC.Element, {
@@ -565,17 +565,13 @@
                 display: 'block',
                 position: 'absolute',
                 left: '0px',
-                top: '0px',
-                height: Util.pixels(self.tagHeight)
+                top: '0px'
             });
 
             tableView = (new Element('table', {
                 cellSpacing: '0px',
                 cellPadding: '0px'
             })).inject(view);
-            tableView.setStyles({
-                height: '100%'
-            });
 
             tableRowView = (new Element('tr')).inject(tableView);
 
@@ -587,7 +583,7 @@
             textView.setStyles({
                 fontFamily: 'monospace',
                 fontSize: '14px',                
-                height: '100%',
+                height: Util.pixels(self.tagHeight),
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'pre'
@@ -615,19 +611,18 @@
         },
         getLocation: function() {
             var self = this,
-                result = new Location(),
-                view = self.getRenderedCanvas(),
+                view,
                 offsetParent,
                 position
                 ;
 
-            if (view) {
-                offsetParent = view.getOffsetParent();
-                position = view.getPosition(offsetParent);
-                result = new Location(position.x, position.y);
-            }
+            self._requireView();
 
-            return result;
+            view = self.getRenderedCanvas()
+            offsetParent = view.getOffsetParent();
+            position = view.getPosition(offsetParent);
+
+            return new Location(position.x, position.y);
         },
         setLocation: function(location) {
             var self = this,
