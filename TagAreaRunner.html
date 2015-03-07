@@ -27,7 +27,15 @@
           },
           tags: [{
             text: 'Hello, TagArea!',
-            value: 'HELLO_TAGAREA'
+            value: 'HELLO_TAGAREA',
+            actions: [{
+              name: 'ringOut',
+              html: 'R',
+              title: 'RingOut',
+              handler: function() {
+                alert('ringOut');
+              }
+            }]
           }, {
             text: 'I love Hackathon!',
             value: 'Cool'

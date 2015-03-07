@@ -97,7 +97,7 @@
 
             if (RC.isArray(self.initialTags)) {
                 self.initialTags.each(function(initialTag) {
-                    self.createTag(initialTag.text, initialTag.value);
+                    self.createTag(initialTag.text, initialTag.value, false, initialTag.actions);
                 });
                 delete self.initialTags;
             }
@@ -149,7 +149,8 @@
                 color: '#FFFFFF',
                 height: self.viewConfig.tagHeight,
                 padding: self.viewConfig.tagPadding,
-                maxWidth: self._getMaxAvailableWidth()
+                maxWidth: self._getMaxAvailableWidth(),
+                actionWidth: 12
             };
         },                        
         _calculateWidthOfAString: function(aString) {
@@ -621,7 +622,7 @@
 
             return Dimension.fromElement(view);
         },
-        createTag: function(text, value, keep) {
+        createTag: function(text, value, keep, actions) {
             var self = this,
                 tag,
                 view = self.getRenderedCanvas(),
@@ -638,7 +639,7 @@
                 }                
             }
 
-            tag = new Tag(text, value, self._getTagViewConfig());
+            tag = new Tag(text, value, self._getTagViewConfig(), actions);
             tag.onDelete(function(tag) {
                 self._deleteTag(tag);
             });            
@@ -698,12 +699,31 @@
     };
 
     var Tag = RC.extend(RC.Element, {
-        constructor: function(text, value, viewConfig) {
-            Tag.superclass.constructor.apply(this, [{}]);
-            this.text = text;
-            this.value = value;
-            this.viewConfig = viewConfig;
-            this.location = new Location();
+        constructor: function(text, value, viewConfig, actions) {
+            var self = this
+                ;
+
+            Tag.superclass.constructor.apply(self, [{}]);
+            self.text = text;
+            self.value = value;
+            self.viewConfig = viewConfig;
+            self.location = new Location();
+            self.actions = [];
+
+            actions = RC.isArray(actions) ? actions
+                                          : [];
+            actions.each(function(action) {
+                self.actions.push(action);
+            });
+            self.actions.push({
+                name: 'delete',
+                html: '&times;',
+                title: 'Delete',
+                className: 'tagarea-tag-action-delete',
+                handler: function() {
+                    self.fireListener('delete', self);
+                }
+            });
         },
         _requireView: function() {
             var self = this,
@@ -725,8 +745,9 @@
                 tableView,
                 tableRowView,
                 textView,
-                deleteIconView,
-                deleteIconViewWidth = 12
+                actionElement,
+                actionElementContainer,
+                actionPaddingLeft = 2
                 ;
 
             self.getRenderedCanvas = function() {
@@ -753,7 +774,8 @@
             textView = (new Element('div', {
                 html: Util.htmlEntities(self.text)
             })).inject((new Element('td', {
-                style: RC.UI.Message('max-width: {0};', Util.pixels(self.viewConfig.maxWidth - deleteIconViewWidth))
+                style: RC.UI.Message('max-width: {0};', Util.pixels(self.viewConfig.maxWidth - 
+                    self.viewConfig.actionWidth * self.actions.length))
             })).inject(tableRowView));
             textView.setStyles({
                 fontFamily: self.viewConfig.fontFamily,
@@ -770,22 +792,30 @@
                 padding: Util.pixels(self.viewConfig.padding)
             });   
             Util.enableSmartTooltip(textView);
-
-            deleteIconView = (new Element('td', {
-                html: '&times;'
-            })).inject(tableRowView);
-            deleteIconView.setStyles({
-                fontFamily: self.viewConfig.fontFamily,
-                fontSize: Util.pixels(self.viewConfig.fontSize),
-                // color: self.viewConfig.color,                    
-                width: Util.pixels(deleteIconViewWidth),
-                textAlign: 'center',
-                cursor: 'pointer',
-                verticalAlign: 'middle'
-            }); 
-            deleteIconView.addEvent('click', function() {
-                self.fireListener('delete', self);
-            });         
+  
+            self.actions.each(function(action) {
+                actionElement = (new Element('div', {
+                    html: action.html,
+                    title: action.title,
+                    'class': action.className
+                }));
+                action.styles && actionElement.setStyles(action.styles);
+                actionElement.setStyles({
+                    fontFamily: self.viewConfig.fontFamily,
+                    fontSize: Util.pixels(self.viewConfig.fontSize),
+                    cursor: 'pointer'
+                })
+                actionElementContainer = (new Element('td')).inject(tableRowView);
+                actionElementContainer.setStyles({
+                    verticalAlign: 'middle',
+                    paddingLeft: Util.pixels(actionPaddingLeft),
+                    width: Util.pixels(Math.max(self.viewConfig.actionWidth - actionPaddingLeft, 0))
+                });
+                actionElement.inject(actionElementContainer);
+                actionElement.addEvent('click', function() {
+                    RC.isFunc(action.handler) && action.handler.call(self);
+                });                 
+            });      
 
             return view;
         },
