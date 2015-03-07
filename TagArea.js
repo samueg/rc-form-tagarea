@@ -149,8 +149,7 @@
                 color: '#FFFFFF',
                 height: self.viewConfig.tagHeight,
                 padding: self.viewConfig.tagPadding,
-                maxWidth: self._getMaxAvailableWidth(),
-                actionWidth: 12
+                maxWidth: self._getMaxAvailableWidth()
             };
         },                        
         _calculateWidthOfAString: function(aString) {
@@ -736,6 +735,20 @@
 
             return view;
         },
+        _getActionWidth: function(action) {
+            return isNaN(action.width) ? 10 : action.width;
+        },        
+        _getActionsWidth: function() {
+            var self = this,
+                result = 0
+                ;
+
+            self.actions.each(function(action) {
+                result += self._getActionWidth(action);
+            });
+
+            return result;
+        },
         /**
          * @override
          */   
@@ -747,6 +760,7 @@
                 textView,
                 actionElement,
                 actionElementContainer,
+                actionWidth,
                 actionPaddingLeft = 2
                 ;
 
@@ -774,8 +788,7 @@
             textView = (new Element('div', {
                 html: Util.htmlEntities(self.text)
             })).inject((new Element('td', {
-                style: RC.UI.Message('max-width: {0};', Util.pixels(self.viewConfig.maxWidth - 
-                    self.viewConfig.actionWidth * self.actions.length))
+                style: RC.UI.Message('max-width: {0};', Util.pixels(self.viewConfig.maxWidth - self._getActionsWidth()))
             })).inject(tableRowView));
             textView.setStyles({
                 fontFamily: self.viewConfig.fontFamily,
@@ -804,12 +817,13 @@
                     fontFamily: self.viewConfig.fontFamily,
                     fontSize: Util.pixels(self.viewConfig.fontSize),
                     cursor: 'pointer'
-                })
+                });
+                actionWidth = Math.max(self._getActionWidth(action) - actionPaddingLeft, 8);
                 actionElementContainer = (new Element('td')).inject(tableRowView);
                 actionElementContainer.setStyles({
                     verticalAlign: 'middle',
                     paddingLeft: Util.pixels(actionPaddingLeft),
-                    width: Util.pixels(Math.max(self.viewConfig.actionWidth - actionPaddingLeft, 0))
+                    width: Util.pixels(actionWidth)
                 });
                 actionElement.inject(actionElementContainer);
                 actionElement.addEvent('click', function() {
