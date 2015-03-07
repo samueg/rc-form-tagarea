@@ -54,7 +54,7 @@
           }]
         }, {
           xtype: 'button',
-          text: 'Supress newTagIsGoingToBeCreated',
+          text: 'Supress enterPressedToCreateTag',
           handler: function() {
                var self = this,
                    form = RC.ComponentMgr.get('form'),
@@ -65,7 +65,7 @@
           }
         }, {
           xtype: 'button',
-          text: 'Enable newTagIsGoingToBeCreated',
+          text: 'Enable enterPressedToCreateTag',
           handler: function() {
                var self = this,
                    form = RC.ComponentMgr.get('form'),
@@ -73,6 +73,18 @@
                    ;
 
                 tagArea.enableEnterPressedToCreateTag();
+          }
+        }, {
+          xtype: 'button',
+          text: 'Get value',
+          handler: function() {
+               var self = this,
+                   form = RC.ComponentMgr.get('form'),
+                   tagArea = form.getItem('tagArea'),
+                   tagTextField = form.getItem('tagText')
+                   ;
+
+                tagTextField.setValue(tagArea.getValue().join(', '));
           }
         }]
       }]

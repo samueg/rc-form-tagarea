@@ -677,6 +677,17 @@
                 ;
 
             self.removeListener('enterPressedToCreateTag', suppressEnterPressedToCreateTag);
+        },
+        getValue: function() {
+            var self = this,
+                result = []
+                ;
+
+            self.tags.each(function(tag) {
+                result.push(tag.getValue());
+            });
+
+            return result;
         }
     });
 
