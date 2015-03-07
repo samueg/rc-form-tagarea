@@ -52,6 +52,28 @@
                 tagArea.createTag(tagText, tagText, true);
             }
           }]
+        }, {
+          xtype: 'button',
+          text: 'Supress newTagIsGoingToBeCreated',
+          handler: function() {
+               var self = this,
+                   form = RC.ComponentMgr.get('form'),
+                   tagArea = form.getItem('tagArea')
+                   ;
+
+                tagArea.suppressEnterPressedToCreateTag(); 
+          }
+        }, {
+          xtype: 'button',
+          text: 'Enable newTagIsGoingToBeCreated',
+          handler: function() {
+               var self = this,
+                   form = RC.ComponentMgr.get('form'),
+                   tagArea = form.getItem('tagArea')
+                   ;
+
+                tagArea.enableEnterPressedToCreateTag();
+          }
         }]
       }]
   	});

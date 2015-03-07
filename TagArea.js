@@ -1,5 +1,5 @@
 (function() {
-    Element.Events.newTagIsGoingToBeCreated = {
+    Element.Events.enterPressedToCreateTag = {
         base: 'keypress',
         condition: function(event) {
             return 'enter' == event.key;
@@ -57,6 +57,10 @@
     Class.Mutators.Static = function(members){
         this.extend(members);
     };    
+
+    function suppressEnterPressedToCreateTag() {
+        return false;
+    }
 
     RC.form.TagArea = RC.extend(RC.form.Field, {
         constructor: function(config) {
@@ -544,15 +548,18 @@
                 lineHeight: Util.pixels(self.viewConfig.tagHeight + self.viewConfig.tagPadding * 2)
             });
             textarea.inject(view);
-            textarea.addEvent('newTagIsGoingToBeCreated', function(event) {
-                var text
+            textarea.addEvent('enterPressedToCreateTag', function(event) {
+                var text = self._getPendingContent(),
+                    canContinue
                     ;
 
                 event.preventDefault();
-                
-                text = self._getPendingContent();
-                self._clearPendingContent();
-                self.createTag(text, text);
+
+                canContinue = self.fireListener('enterPressedToCreateTag', self, text);
+                if (canContinue !== false) {
+                    self._clearPendingContent();
+                    self.createTag(text, text);
+                }
             });
 
             textarea.addEvent('pendingContentOverflow', function(event) {
@@ -658,6 +665,18 @@
             }
 
             return self;
+        },
+        suppressEnterPressedToCreateTag: function() {
+            var self = this
+                ;
+
+            self.addListener('enterPressedToCreateTag', suppressEnterPressedToCreateTag);
+        },
+        enableEnterPressedToCreateTag: function(fn) {
+            var self = this
+                ;
+
+            self.removeListener('enterPressedToCreateTag', suppressEnterPressedToCreateTag);
         }
     });
 
